@@ -141,7 +141,8 @@ PAGE STRUCTURE (follow this order exactly):
 1. HERO
    - H1: "${h1}"
    - Subhead: one sharp line about what this page delivers
-   - Single CTA button: "Book a Free 30-Minute Call" → https://field-built.com
+   - Primary CTA button: "Book a Free 30-Minute Call" → https://field-built.com/book
+   - Below the button: a smaller secondary link "Or try the AI demo first →" → https://field-built.com/demo, styled in gradient text, no underline
 
 2. INTRO PARAGRAPH
    - Who this is for (${vertical} owners in ${city} with 1–15 trucks, $300K–$5M revenue)
@@ -176,7 +177,6 @@ PAGE STRUCTURE (follow this order exactly):
    - Automated review requests: ✓ | ✗ | ✗
    - Lead follow-up sequences: ✓ | Manual | ✗
    - Launch timeline: 10–14 days | Months | Never
-   - Monthly cost: $500/mo all-in | $300–800+ DIY config | Your time
 
 7. FAQ (4–5 questions)
    - Real objections from ${vertical} owners — not generic software questions
@@ -185,22 +185,32 @@ PAGE STRUCTURE (follow this order exactly):
 
 8. CTA SECTION
    - Low-commitment framing: 30 minutes, no pitch deck, no pressure
-   - Button: "Book a Free 30-Minute Call" → https://field-built.com
-   - One line of reassurance beneath the button
+   - Button: "Book a Free 30-Minute Call" → https://field-built.com/book
+   - Below the button: a smaller secondary link "Or try the AI demo first →" → https://field-built.com/demo, styled in gradient text, no underline
+   - One line of reassurance beneath both
 
 HTML/CSS REQUIREMENTS:
 - Complete standalone file, no external dependencies except Google Fonts (Inter)
 - Inline styles only — no external CSS files
-- Color palette: background #0a0a0a, surface #111827, accent #f97316 (orange), text #f9fafb, muted #9ca3af
+- LIGHT MODE — white/light background, dark text. No dark backgrounds anywhere.
+- Color palette:
+    background: #ffffff
+    surface (cards, table rows): #f8fafc
+    border: #e2e8f0
+    text primary: #0f172a
+    text muted: #64748b
+    gradient: linear-gradient(135deg, #1B98E0, #8B5CF6) — used on H1, section headings, and CTA buttons
+    CTA button text: #ffffff
 - Font: Inter from Google Fonts
+- H1 and all section headings: apply the gradient using -webkit-background-clip: text; -webkit-text-fill-color: transparent; background: linear-gradient(135deg, #1B98E0, #8B5CF6)
+- CTA buttons: background: linear-gradient(135deg, #1B98E0, #8B5CF6); color: #ffffff; border: none; border-radius: 6px; padding: 14px 28px; font-weight: 600; cursor: pointer;
 - Mobile responsive using media queries inline in a <style> block
-- Feature cards: 2-column grid on desktop, 1-column on mobile
-- Comparison table: horizontally scrollable on mobile
-- CTA buttons: orange background #f97316, white text, border-radius 6px, padding 14px 28px
-- Nav: just the Field-Built Systems wordmark left-aligned, no links
+- Feature cards: 2-column grid on desktop, 1-column on mobile; white background, subtle border, border-radius 10px, padding 24px
+- Comparison table: horizontally scrollable on mobile; header row uses gradient background with white text
+- Nav: Field-Built Systems wordmark left-aligned, and a "Try a Demo" link right-aligned pointing to https://field-built.com/demo. White background, border-bottom: 1px solid #e2e8f0. "Try a Demo" link styled with the gradient text (same as headings).
 - Meta tags: title, description, canonical (https://seo.field-built.com/${slug}), og:title, og:description
 - No JavaScript required
-- Footer: "© 2025 Field-Built Systems · field-built.com" centered, small, muted`;
+- Footer: "© 2025 Field-Built Systems · field-built.com" centered, small, color #64748b`;
 }
 
 // ─── API call with retry ────────────────────────────────────────────────────
