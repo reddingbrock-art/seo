@@ -27,7 +27,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const CONFIG = {
   csvPath: path.join(__dirname, "targets.csv"),
-  outputDir: path.join(__dirname, "output"),
+  outputDir: path.join(__dirname, "docs"),
   logFile: path.join(__dirname, "batch.log"),
   errorFile: path.join(__dirname, "batch-errors.log"),
   model: "claude-opus-4-6",
