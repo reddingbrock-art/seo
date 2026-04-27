@@ -208,7 +208,7 @@ HTML/CSS REQUIREMENTS:
 - Font: Inter from Google Fonts
 - NAV: 
     - Background: #ffffff, border-bottom: 1px solid #e2e8f0, padding 16px 24px, display flex, align-items center, justify-content space-between
-    - Left side: logo image only — <img src="https://assets.cdn.filesafe.space/8rt3tZ6TYwlA5NWwwHXp/media/69929aab54da04ad2c3450ae.jpg" height="52" alt="Field-Built Systems" style="display:block;"> — no text next to it, the logo contains the name already
+    - Left side: logo image only — <img src="https://assets.cdn.filesafe.space/8rt3tZ6TYwlA5NWwwHXp/media/69eef624717d5dd4e14a4fee.png" height="52" alt="Field-Built Systems" style="display:block;"> — no text next to it, the logo contains the name already
     - Right side: "Try a Demo" link → https://field-built.com/demo, styled with brand gradient text (-webkit-background-clip: text; -webkit-text-fill-color: transparent; background: linear-gradient(135deg, #1B98E0, #8B5CF6); font-weight: 600;)
 - HERO SECTION:
     - Background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%)
