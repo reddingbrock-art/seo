@@ -43,13 +43,13 @@ const CONFIG = {
 
 // ─── Arg parsing ───────────────────────────────────────────────────────────
 
-const args         = process.argv.slice(2);
-const flag         = (f) => { const i = args.indexOf(f); return i !== -1 ? args[i + 1] : null; };
-const hasFlag      = (f) => args.includes(f);
-const LIMIT        = flag("--limit")  ? parseInt(flag("--limit"))  : null;
-const TARGET_SLUG  = flag("--slug")   ?? null;
-const CHUNK_INDEX  = flag("--chunk")  ? parseInt(flag("--chunk"))  : null;  // 1-based
-const CHUNK_TOTAL  = flag("--of")     ? parseInt(flag("--of"))     : null;
+const args          = process.argv.slice(2);
+const flag          = (f) => { const i = args.indexOf(f); return i !== -1 ? args[i + 1] : null; };
+const hasFlag       = (f) => args.includes(f);
+const LIMIT         = flag("--limit")  ? parseInt(flag("--limit"))  : null;
+const TARGET_SLUG   = flag("--slug")   ?? null;
+const CHUNK_INDEX   = flag("--chunk")  ? parseInt(flag("--chunk"))  : null;  // 1-based
+const CHUNK_TOTAL   = flag("--of")     ? parseInt(flag("--of"))     : null;
 const SKIP_EXISTING = hasFlag("--skip-existing");
 
 // ─── Logging ───────────────────────────────────────────────────────────────
@@ -66,20 +66,32 @@ function logError(slug, err) {
   fs.appendFileSync(CONFIG.errorFile, line + "\n");
 }
 
+// ─── Helpers ───────────────────────────────────────────────────────────────
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+function ensureDir(dir) {
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+}
+
+// Each slug writes to docs/slug/index.html → serves at /slug (no extension)
+function outputPath(slug) {
+  return path.join(CONFIG.outputDir, slug, "index.html");
+}
+
 // ─── Prompt builder ────────────────────────────────────────────────────────
 
 function buildPrompt(row) {
   const { vertical, city, state, page_type, angle, slug } = row;
 
-  // Derive the keyword-targeted H1 from page_type + angle
   const angleLabel = {
-    "general":              `${vertical} companies`,
-    "small-business":       `small ${vertical} companies`,
-    "owner-operator":       `${vertical} owner-operators`,
-    "scaling-up":           `${vertical} companies scaling up`,
+    "general":                `${vertical} companies`,
+    "small-business":         `small ${vertical} companies`,
+    "owner-operator":         `${vertical} owner-operators`,
+    "scaling-up":             `${vertical} companies scaling up`,
     "switching-servicetitan": `${vertical} companies switching from ServiceTitan`,
-    "switching-jobber":     `${vertical} companies switching from Jobber`,
-    "new-business":         `new ${vertical} companies`,
+    "switching-jobber":       `${vertical} companies switching from Jobber`,
+    "new-business":           `new ${vertical} companies`,
   }[angle] ?? `${vertical} companies`;
 
   const pageLabel = {
@@ -92,7 +104,6 @@ function buildPrompt(row) {
 
   const h1 = pageLabel;
 
-  // For competitor-angle pages, swap the middle column header
   const midColHeader =
     angle === "switching-servicetitan" ? "ServiceTitan" :
     angle === "switching-jobber"       ? "Jobber"       :
@@ -105,6 +116,22 @@ function buildPrompt(row) {
     "lead-followup":`Done-for-you lead follow-up system for ${vertical} companies in ${city}. Automated sequences via text and email, built on GoHighLevel. Live in 10–14 days.`,
     "reviews":      `Automated Google review system for ${vertical} businesses in ${city}. Review requests go out after every job — installed and running in 10–14 days.`,
   }[page_type] ?? `Done-for-you automation system for ${vertical} businesses in ${city}. Built on GoHighLevel with AI chat, lead follow-up, and review automation. Live in 10–14 days.`;
+
+  const ctaH2 = {
+    "crm":          `Ready to Replace Your CRM With Something Built for ${vertical} in ${city}?`,
+    "automation":   `Ready to Put Your ${vertical} Business in ${city} on Autopilot?`,
+    "ai-chat":      `Ready to Stop Missing Calls From ${city} ${vertical} Customers?`,
+    "lead-followup":`Ready to Stop Losing ${city} ${vertical} Leads to Slow Follow-Up?`,
+    "reviews":      `Ready to Build Your ${vertical} Reputation in ${city} on Autopilot?`,
+  }[page_type] ?? `Ready to See What This Looks Like for Your ${vertical} Business?`;
+
+  const faqSuggestions = {
+    "crm":          `"Do I have to migrate all my old data?", "Is this just GoHighLevel with a different name?", "What if my techs won't use a new system?", "How is this different from buying GHL directly?"`,
+    "automation":   `"What gets automated and what's still manual?", "Will this work with the tools I already use?", "Do I have to learn how to build automations?", "What if something breaks while I'm on a job?"`,
+    "ai-chat":      `"What happens when a customer asks something the AI can't answer?", "Can I customize what the AI says?", "Will customers know they're talking to an AI?", "Does it work after hours and on weekends?"`,
+    "lead-followup":`"How fast does the follow-up actually go out?", "What if a lead says stop texting me?", "Can I see what messages went out?", "What if I already have a follow-up sequence?"`,
+    "reviews":      `"What if a customer leaves a bad review?", "Can I control which customers get the review request?", "How does it know when a job is done?", "Will this work on Google and other platforms?"`,
+  }[page_type] ?? `"Do I have to learn new software?", "What if I'm already using GoHighLevel?", "How is this different from just buying a CRM?", "What happens after setup — are you done?"`;
 
   return `You are writing a single, complete, production-ready HTML page for Field-Built Systems — a done-for-you automation agency serving field service businesses.
 
@@ -175,26 +202,12 @@ PAGE STRUCTURE — FOLLOW EXACTLY, IN ORDER
 7. FAQ (4–5 questions)
    - Questions must be specific to BOTH the vertical AND the page_type — not generic software questions
    - Direct answers only. No restating the question. No fluff.
-   - Do NOT reuse the same questions across page types. Choose from these by page_type:
-       crm:          "Do I have to migrate all my old data?", "Is this just GoHighLevel with a different name?",
-                     "What if my techs won't use a new system?", "How is this different from buying GHL directly?"
-       automation:   "What gets automated and what's still manual?", "Will this work with the tools I already use?",
-                     "Do I have to learn how to build automations?", "What if something breaks while I'm on a job?"
-       ai-chat:      "What happens when a customer asks something the AI can't answer?", "Can I customize what the AI says?",
-                     "Will customers know they're talking to an AI?", "Does it work after hours and on weekends?"
-       lead-followup:"How fast does the follow-up actually go out?", "What if a lead says stop texting me?",
-                     "Can I see what messages went out?", "What if I already have a follow-up sequence?"
-       reviews:      "What if a customer leaves a bad review?", "Can I control which customers get the review request?",
-                     "How does it know when a job is done?", "Will this work on Google and other platforms?"
+   - Choose from these suggested questions for this page_type:
+       ${faqSuggestions}
    - Each FAQ question: wrap in <h3>
 
 8. CTA SECTION
-   - H2 must be specific to the page type — pick the matching one:
-       crm:          "Ready to Replace Your CRM With Something Built for ${vertical} in ${city}?"
-       automation:   "Ready to Put Your ${vertical} Business in ${city} on Autopilot?"
-       ai-chat:      "Ready to Stop Missing Calls From ${city} ${vertical} Customers?"
-       lead-followup:"Ready to Stop Losing ${city} ${vertical} Leads to Slow Follow-Up?"
-       reviews:      "Ready to Build Your ${vertical} Reputation in ${city} on Autopilot?"
+   - H2: "${ctaH2}"
    - Low-commitment framing: "30 minutes. No pitch deck. No pressure."
    - Button: "Book a Free 30-Minute Call" → https://field-built.com/book
    - One line of reassurance beneath: "Most clients are live within 10–14 days."
@@ -204,20 +217,20 @@ DESIGN SYSTEM — MATCH THE HOMEPAGE EXACTLY
 ═══════════════════════════════════════════════════
 
 COLORS (use CSS custom properties):
-  --bg:        #080C14    /* page background */
-  --bg-card:   #0E1420    /* card / section alt background */
-  --bg-alt:    #0A0F1A    /* subtle alternating section tint */
+  --bg:        #080C14
+  --bg-card:   #0E1420
+  --bg-alt:    #0A0F1A
   --border:    rgba(255,255,255,0.07)
-  --text:      #F1F5F9    /* primary text */
-  --text-muted:#8B9AB4    /* secondary / caption text */
-  --cyan:      #1B98E0    /* gradient start / accent */
-  --violet:    #8B5CF6    /* gradient end */
-  --green:     #22D87A    /* ✓ checkmarks */
-  --red:       #EF4444    /* ✗ marks */
-  --amber:     #F59E0B    /* Manual label */
-  --fbs-val:   #00D4FF    /* FBS table values */
+  --text:      #F1F5F9
+  --text-muted:#8B9AB4
+  --cyan:      #1B98E0
+  --violet:    #8B5CF6
+  --green:     #22D87A
+  --red:       #EF4444
+  --amber:     #F59E0B
+  --fbs-val:   #00D4FF
 
-GRADIENT (use on H2 accent words, CTA button, and hero badge):
+GRADIENT (use on H2 accent words, CTA button, hero badge):
   background: linear-gradient(90deg, #1B98E0, #8B5CF6);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -231,164 +244,142 @@ TYPOGRAPHY:
   - Body: font-size 16–18px; color: var(--text); line-height: 1.7
   - Muted: color: var(--text-muted)
 
-NAV (fixed, matches homepage exactly):
-  Use a <header> element wrapping a <nav aria-label="Main navigation"> inside it.
-  <header> fixed top-0, z-index 100, border-bottom: 1px solid var(--border),
+NAV:
+  Use <header> wrapping <nav aria-label="Main navigation">.
+  Fixed top-0, z-index 100, border-bottom: 1px solid var(--border),
   background: rgba(8,12,20,0.9), backdrop-filter: blur(20px), height: 64px.
 
-  LEFT: Logo img + "Field-Built Systems" wordmark
-    Logo: <img src="https://assets.cdn.filesafe.space/8rt3tZ6TYwlA5NWwwHXp/media/69efea020d66f2a665bccba8.png"
-               alt="Field-Built Systems logo" style="height:40px;width:auto;object-fit:contain">
+  LEFT: Logo + wordmark
+    <img src="https://assets.cdn.filesafe.space/8rt3tZ6TYwlA5NWwwHXp/media/69efea020d66f2a665bccba8.png"
+         alt="Field-Built Systems logo" style="height:40px;width:auto;object-fit:contain">
     Wordmark: font-size 22px; font-weight 700; color #F1F5F9; margin-left 12px
 
   CENTER LINKS (hidden on mobile): Home | Services | About | Demo
-    href values: https://field-built.com | /services | /about | /demo
+    href: https://field-built.com | /services | /about | /demo
     Active (Home): color #1B98E0
     Inactive: color #8B9AB4; hover: color #1B98E0; transition 0.2s
 
   RIGHT: "Book a Free Call" button
-    gradient background (--cyan → --violet), border-radius 999px,
-    padding 10px 22px, font-size 14px, font-weight 600, color #fff,
-    no border, cursor pointer
+    gradient background, border-radius 999px, padding 10px 22px,
+    font-size 14px, font-weight 600, color #fff, no border
 
-  MOBILE HAMBURGER: visible below 768px; clicking toggles a full-width dropdown menu
-  with all nav links + CTA stacked vertically on --bg-card background.
-  Implement with a <script> block — no frameworks.
+  MOBILE HAMBURGER: visible below 768px, toggles full-width dropdown on --bg-card.
+  Implement with a <script> block at bottom of <body> — no frameworks.
 
-HERO SECTION:
-  - min-height: 100vh; display flex align-center justify-center; text-center
-  - Background: radial-gradient from rgba(27,152,224,0.12) center, over --bg
-  - Animated grid overlay: 40px grid lines at rgba(255,255,255,0.03), use CSS background-image
-  - Two decorative blurred orbs (position absolute, pointer-events none, blur 80px):
-      Orb 1: 400px circle, rgba(27,152,224,0.15), top-left area
-      Orb 2: 300px circle, rgba(139,92,246,0.12), bottom-right area
-  - Badge above H1: rounded-full, border 1px solid rgba(27,152,224,0.4),
-      background rgba(27,152,224,0.1), gradient text, font-size 11px uppercase tracking-widest
-  - H1: white, clamp(36px,5vw,64px), weight 900 — target keyword verbatim
-  - Subhead: color var(--text-muted), max-width 520px, margin auto, font-size 18px
-  - CTA button: gradient bg, rounded-full, padding 16px 36px, font-size 16px weight 700, color #fff,
+HERO:
+  - min-height: 100vh; display flex; align-items center; justify-content center; text-center
+  - Background: radial-gradient from rgba(27,152,224,0.12) center over --bg
+  - Animated grid overlay: 40px lines at rgba(255,255,255,0.03) via CSS background-image
+  - Two blurred orbs (position absolute, pointer-events none, blur 80px):
+      Orb 1: 400px, rgba(27,152,224,0.15), top-left
+      Orb 2: 300px, rgba(139,92,246,0.12), bottom-right
+  - Badge: rounded-full, border 1px solid rgba(27,152,224,0.4), bg rgba(27,152,224,0.1),
+      gradient text, font-size 11px uppercase tracking-widest
+  - CTA button: gradient bg, rounded-full, padding 16px 36px, font-size 16px weight 700,
       box-shadow: 0 0 32px rgba(27,152,224,0.35)
 
 SECTIONS:
-  - padding: 80px 24px (desktop); 60px 20px (mobile)
-  - max-width container: 1100px, margin auto
-  - Section labels (eyebrow text): font-size 11px, uppercase, letter-spacing 0.1em, color var(--cyan)
-  - Alternate section backgrounds: --bg → --bg-alt → --bg → --bg-card etc.
+  - padding: 80px 24px desktop; 60px 20px mobile
+  - max-width 1100px, margin auto
+  - Eyebrow labels: font-size 11px, uppercase, letter-spacing 0.1em, color var(--cyan)
+  - Alternate backgrounds: --bg → --bg-alt → --bg → --bg-card
 
-CARDS (feature cards):
+CARDS:
   - background: var(--bg-card); border: 1px solid var(--border); border-radius: 16px; padding: 28px
-  - On hover: border-color rgba(27,152,224,0.3); box-shadow: 0 0 20px rgba(27,152,224,0.08)
-  - Icon tile: 48px square, border-radius 12px, gradient background, icon in white
-  - Card title: H3, font-size 18px, font-weight 700, color var(--text)
-  - Card body: font-size 15px, color var(--text-muted), line-height 1.65
+  - hover: border-color rgba(27,152,224,0.3); box-shadow: 0 0 20px rgba(27,152,224,0.08)
+  - Icon tile: 48px, border-radius 12px, gradient background
+  - H3: font-size 18px, font-weight 700, color var(--text)
+  - Body: font-size 15px, color var(--text-muted), line-height 1.65
 
 COMPARISON TABLE:
-  - border-collapse: separate; border-spacing: 0; width: 100%; border-radius: 12px; overflow hidden
-  - Header row: background linear-gradient(135deg, rgba(27,152,224,0.15), rgba(139,92,246,0.1))
-  - FBS column header: color var(--fbs-val); font-weight 800
-  - Odd rows: background rgba(255,255,255,0.02); even: transparent
-  - Cell padding: 16px 20px; border-bottom: 1px solid var(--border)
-  - ✓ spans: color var(--green); font-weight 700
-  - ✗ spans: color var(--red); font-weight 700
-  - Manual spans: color var(--amber); font-weight 600
-  - FBS value cells: color var(--fbs-val); font-weight 600
-  - Wrap table in horizontally scrollable div on mobile
+  - border-collapse: separate; border-spacing: 0; border-radius: 12px; overflow hidden
+  - Header: linear-gradient(135deg, rgba(27,152,224,0.15), rgba(139,92,246,0.1))
+  - FBS header: color var(--fbs-val); font-weight 800
+  - Odd rows: rgba(255,255,255,0.02); cell padding 16px 20px
+  - ✓ color var(--green) font-weight 700
+  - ✗ color var(--red) font-weight 700
+  - Manual: color var(--amber) font-weight 600
+  - FBS values: color var(--fbs-val) font-weight 600
+  - Mobile: wrap in horizontally scrollable div
+  - Include visually hidden caption:
+    <caption style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)">
+      Field-Built Systems vs ${midColHeader} vs DIY — feature and pricing comparison
+    </caption>
 
 FAQ:
-  - Accordion-style, pure CSS or minimal JS
+  - Accordion, pure CSS or minimal JS
   - Each item: border-bottom 1px solid var(--border); padding 20px 0
-  - Question (H3): font-size 17px; font-weight 600; color var(--text); cursor pointer
+  - H3: font-size 17px; font-weight 600; color var(--text); cursor pointer
   - Answer: font-size 15px; color var(--text-muted); line-height 1.7; padding-top 12px
 
 CTA SECTION:
-  - Background: radial-gradient from rgba(27,152,224,0.08) center over --bg
-  - H2: white with gradient accent words
-  - Subhead: var(--text-muted)
+  - radial-gradient from rgba(27,152,224,0.08) over --bg
   - Button: gradient bg, rounded-full, padding 18px 44px, font-size 17px weight 700, glow shadow
 
-FOOTER (matches homepage):
-  Use a semantic <footer> element (not a div).
+FOOTER:
+  Use semantic <footer>.
   - background: #080C14; border-top: 1px solid var(--border); padding: 48px 24px
-  - 4-column grid (desktop): col-span-2 brand block + Company nav + Legal nav
-  - Brand block: logo img + "Field-Built Systems" wordmark, tagline, phone + email links
-      Logo: same src as nav, height 32px
+  - 4-col grid desktop: col-span-2 brand + Company nav + Legal nav
+  - Brand: logo (height 32px, loading="lazy", alt="Field-Built Systems logo") + wordmark + tagline
       Phone: (817) 518-7791 → tel:8175187791
       Email: info@field-built.com
-  - Company links: Services → /services; About → /about; Contact → /contact
-  - Legal links: Privacy Policy → /privacy; Terms of Service → /terms; Service Agreement → /service-agreement
-  - Bottom bar: "© 2026 Field-Built Systems. All rights reserved." centered, font-size 13px, color var(--text-muted)
+  - Company: Services /services · About /about · Contact /contact
+  - Legal: Privacy Policy /privacy · Terms of Service /terms · Service Agreement /service-agreement
+  - Bottom: "© 2026 Field-Built Systems. All rights reserved." centered, 13px, var(--text-muted)
   - All footer links: color var(--text-muted); hover: color var(--cyan)
-  - On mobile: stack to 1 column
+  - Mobile: stack to 1 column
 
 ═══════════════════════════════════════════════════
 META / TECHNICAL REQUIREMENTS
 ═══════════════════════════════════════════════════
 - Complete standalone HTML file: <!DOCTYPE html> through </html>
-- Opening tag must be: <html lang="en">
+- Opening tag: <html lang="en">
 - <head> includes:
     - charset UTF-8, viewport meta
     - <meta name="robots" content="index, follow">
-    - <title> tag: Title Case. Must include the exact target keyword + "Field-Built Systems".
-      Target 55 characters or fewer (Google measures in pixels; stay conservative).
-      Example: "Best CRM for HVAC Companies in Phoenix | Field-Built Systems"
-      If over 55 chars, abbreviate the state (AZ not Arizona) or drop the angle modifier.
-    - <meta name="description">: 140–155 chars. Must include: (1) exact target keyword or close
-      variant, (2) city name, (3) a specific outcome or differentiator, (4) a soft CTA. No filler.
-      Example: "Field-Built Systems installs a done-for-you CRM for HVAC companies in Phoenix. AI chat, automated reviews, lead follow-up — live in 10–14 days. Book a free call."
+    - <title>: Title Case, exact keyword + "| Field-Built Systems", ≤55 chars
+    - <meta name="description">: 140–155 chars — keyword, city, outcome, soft CTA. No filler.
     - <link rel="canonical" href="https://local.field-built.com/${slug}">
-    - Open Graph tags:
-        <meta property="og:title" content="${h1} | Field-Built Systems">
-        <meta property="og:description" content="COPY THE META DESCRIPTION VERBATIM HERE — same exact text, not a rewrite">
-        <meta property="og:url" content="https://local.field-built.com/${slug}">
-        <meta property="og:type" content="website">
-        <meta property="og:image" content="https://assets.cdn.filesafe.space/8rt3tZ6TYwlA5NWwwHXp/media/69efea020d66f2a665bccba8.png">
-        <meta property="og:site_name" content="Field-Built Systems">
+    - OG tags:
+        og:title    → "${h1} | Field-Built Systems"
+        og:description → same text as meta description verbatim
+        og:url      → "https://local.field-built.com/${slug}"
+        og:type     → "website"
+        og:image    → "https://assets.cdn.filesafe.space/8rt3tZ6TYwlA5NWwwHXp/media/69efea020d66f2a665bccba8.png"
+        og:site_name → "Field-Built Systems"
     - Twitter card tags:
-        <meta name="twitter:card" content="summary_large_image">
-        <meta name="twitter:title" content="${h1} | Field-Built Systems">
-        <meta name="twitter:description" content="COPY THE META DESCRIPTION VERBATIM HERE">
-        <meta name="twitter:image" content="https://assets.cdn.filesafe.space/8rt3tZ6TYwlA5NWwwHXp/media/69efea020d66f2a665bccba8.png">
-    - Google Fonts — use preconnect to reduce render-blocking, then the stylesheet:
+        twitter:card        → "summary_large_image"
+        twitter:title       → "${h1} | Field-Built Systems"
+        twitter:description → same as meta description verbatim
+        twitter:image       → same og:image URL
+    - Google Fonts preconnect then stylesheet:
         <link rel="preconnect" href="https://fonts.googleapis.com">
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-    - All CSS in one <style> block — no external stylesheets
-    - Three JSON-LD <script type="application/ld+json"> blocks (see schema below)
+    - All CSS in one <style> block
+    - Three JSON-LD <script type="application/ld+json"> blocks (schema below)
 - No external JS libraries
 - Mobile responsive with inline media queries
 - Hamburger nav JS in a <script> block at bottom of <body>
-- Wrap all page content (everything between nav and footer) in a <main> element
-- Use <section> elements (not divs) for each major content block inside <main>
-- KEYWORD DENSITY: the exact target keyword or a natural close variant must appear:
-    - Within the first 100 words of body text (intro paragraph)
-    - In at least one H2 heading
-    - Naturally 2–3 more times in body copy — never forced, always reads naturally
-- INTERNAL LINKS: within the body copy (not nav, not footer), include at least 2 contextual
-  text links back to field-built.com pages. Anchor text must be natural to the surrounding
-  sentence — not templated. Vary the phrasing. Target pages:
-    https://field-built.com/services — link from copy about what the system includes
-    https://field-built.com/demo    — link from copy inviting the reader to see it in action
-- ALT TEXT: every <img> tag must have a descriptive alt attribute.
-    Nav logo: alt="Field-Built Systems logo"
-    Footer logo: alt="Field-Built Systems logo" loading="lazy"
-    Any purely decorative elements: alt=""
-- COMPARISON TABLE: include a visually hidden <caption> describing the table:
-  <caption style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)">
-    Field-Built Systems vs ${midColHeader} vs DIY — feature and pricing comparison
-  </caption>
-- H TAG STRATEGY — ENFORCE STRICTLY, NO EXCEPTIONS:
-    - ONE H1 per page — the exact target keyword verbatim, nothing else
-    - H2s: every section heading must be keyword-rich and descriptive. NEVER use generic labels like
-      "The Solution", "The Problem", "Why Choose Us", "How It Works", or "Get Started".
-      At least 2 H2s must naturally include both the city name and the vertical. Examples:
-        Good: "Why ${vertical} Owners in ${city} Are Switching Away from Generic CRMs"
-        Good: "What ${city} ${vertical} Companies Get With Field-Built Systems"
-        Bad:  "The Solution" / "How It Works" / "Why Choose Us"
-    - H3s: ONLY inside feature cards and FAQ items — nowhere else on the page
-    - FAQ questions: every question must be wrapped in <h3> — no exceptions
-    - No H4, H5, or H6 tags anywhere on the page
+- Wrap all content between nav and footer in <main>
+- Use <section> elements for each major content block inside <main>
+- KEYWORD DENSITY:
+    - Exact keyword or close variant within first 100 words of body text
+    - In at least one H2
+    - Naturally 2–3 more times in body copy
+- INTERNAL LINKS (2 minimum, in body copy — not nav/footer):
+    - Link to https://field-built.com/services with natural anchor text
+    - Link to https://field-built.com/demo with natural anchor text
+- ALT TEXT: every img must have descriptive alt. Nav logo: "Field-Built Systems logo". Footer logo: same + loading="lazy". Decorative: alt="".
+- H TAG STRATEGY — NO EXCEPTIONS:
+    - ONE H1 — exact target keyword verbatim
+    - H2s: keyword-rich, never generic. At least 2 must include city + vertical naturally.
+      BAD: "The Solution", "How It Works", "Why Choose Us"
+      GOOD: "Why ${vertical} Owners in ${city} Are Switching Away from Generic CRMs"
+    - H3s: ONLY in feature cards and FAQ items
+    - No H4, H5, H6 anywhere
 
-SCHEMA MARKUP — include all three in <head>:
+SCHEMA (all three in <head>):
 
 1. LocalBusiness:
 {
@@ -420,37 +411,24 @@ SCHEMA MARKUP — include all three in <head>:
   "url": "https://local.field-built.com/${slug}"
 }
 
-3. FAQPage — populate mainEntity with ALL 4–5 FAQ items from the page. Every question on the page
-   must appear here. The JSON must be valid — no comments, no placeholders:
+3. FAQPage — ALL 4–5 FAQ items, no placeholders, valid JSON:
 {
   "@context": "https://schema.org",
   "@type": "FAQPage",
   "mainEntity": [
-    {
-      "@type": "Question",
-      "name": "EXACT TEXT OF FAQ QUESTION 1",
-      "acceptedAnswer": { "@type": "Answer", "text": "EXACT TEXT OF FAQ ANSWER 1" }
-    },
-    {
-      "@type": "Question",
-      "name": "EXACT TEXT OF FAQ QUESTION 2",
-      "acceptedAnswer": { "@type": "Answer", "text": "EXACT TEXT OF FAQ ANSWER 2" }
-    },
-    {
-      "@type": "Question",
-      "name": "EXACT TEXT OF FAQ QUESTION 3",
-      "acceptedAnswer": { "@type": "Answer", "text": "EXACT TEXT OF FAQ ANSWER 3" }
-    }
+    { "@type": "Question", "name": "EXACT FAQ Q1", "acceptedAnswer": { "@type": "Answer", "text": "EXACT FAQ A1" } },
+    { "@type": "Question", "name": "EXACT FAQ Q2", "acceptedAnswer": { "@type": "Answer", "text": "EXACT FAQ A2" } },
+    { "@type": "Question", "name": "EXACT FAQ Q3", "acceptedAnswer": { "@type": "Answer", "text": "EXACT FAQ A3" } },
+    { "@type": "Question", "name": "EXACT FAQ Q4", "acceptedAnswer": { "@type": "Answer", "text": "EXACT FAQ A4" } }
   ]
 }
-Every FAQ question on the page must have a matching entry here. Do not leave placeholders — write the real question and answer text.
 
 ═══════════════════════════════════════════════════
 OUTPUT RULES
 ═══════════════════════════════════════════════════
 - Output ONLY the raw HTML — no markdown fences, no explanation, no preamble
 - Start with <!DOCTYPE html> and end with </html>
-- The file must be self-contained and render correctly in a browser with no external resources except Google Fonts
+- Self-contained — renders correctly with no external resources except Google Fonts
 `;
 }
 
@@ -473,7 +451,6 @@ async function generatePage(client, row) {
         .map((b) => b.text)
         .join("");
 
-      // Strip accidental markdown fences
       return raw
         .replace(/^```html\s*/i, "")
         .replace(/^```\s*/i, "")
@@ -485,24 +462,12 @@ async function generatePage(client, row) {
       const isRetryable = err.status === 429 || err.status >= 500;
       if (isRetryable && attempt < CONFIG.rate.maxRetries) {
         log(`  ↻ Retry ${attempt}/${CONFIG.rate.maxRetries} for ${row.slug} (${err.status ?? err.message})`);
-        await sleep(CONFIG.rate.retryDelayMs * attempt); // exponential back-off
+        await sleep(CONFIG.rate.retryDelayMs * attempt);
       } else {
         throw err;
       }
     }
   }
-}
-
-// ─── Helpers ───────────────────────────────────────────────────────────────
-
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
-function ensureDir(dir) {
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-}
-
-function outputPath(slug) {
-  return path.join(CONFIG.outputDir, `${slug}.html`);
 }
 
 // ─── Main ──────────────────────────────────────────────────────────────────
@@ -517,12 +482,10 @@ async function main() {
 
   ensureDir(CONFIG.outputDir);
 
-  // Parse CSV
-  const raw     = fs.readFileSync(CONFIG.csvPath, "utf8");
-  let rows      = parse(raw, { columns: true, skip_empty_lines: true, trim: true });
-  const total   = rows.length;
+  const raw   = fs.readFileSync(CONFIG.csvPath, "utf8");
+  let rows    = parse(raw, { columns: true, skip_empty_lines: true, trim: true });
+  const total = rows.length;
 
-  // Filter to single slug if requested
   if (TARGET_SLUG) {
     rows = rows.filter((r) => r.slug === TARGET_SLUG);
     if (rows.length === 0) {
@@ -531,16 +494,13 @@ async function main() {
     }
   }
 
-  // Chunk filtering (for parallel CI matrix)
   if (CHUNK_INDEX !== null && CHUNK_TOTAL !== null) {
     rows = rows.filter((_, i) => i % CHUNK_TOTAL === CHUNK_INDEX - 1);
     log(`Chunk ${CHUNK_INDEX}/${CHUNK_TOTAL}: ${rows.length} rows`);
   }
 
-  // Limit
   if (LIMIT) rows = rows.slice(0, LIMIT);
 
-  // Skip existing
   if (SKIP_EXISTING) {
     const before = rows.length;
     rows = rows.filter((r) => !fs.existsSync(outputPath(r.slug)));
@@ -566,6 +526,7 @@ async function main() {
         throw new Error("Output does not look like valid HTML — skipping write");
       }
 
+      ensureDir(path.dirname(out));
       fs.writeFileSync(out, html, "utf8");
       log(`  ✓ Written: ${out}`);
       success++;
@@ -575,7 +536,6 @@ async function main() {
       failed++;
     }
 
-    // Rate limit delay (skip after last item)
     if (i < rows.length - 1) {
       await sleep(CONFIG.rate.delayBetweenMs);
     }
@@ -584,7 +544,7 @@ async function main() {
   log(`\nDone. ✓ ${success} succeeded  ✗ ${failed} failed`);
   if (failed > 0) {
     log(`Check batch-errors.log for details.`);
-    process.exit(1); // non-zero exit so CI catches failures
+    process.exit(1);
   }
 }
 
