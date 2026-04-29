@@ -1,0 +1,14 @@
+{
+  "name": "fbs-seo",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "generate": "node batch.js",
+    "generate:test": "node batch.js --limit 1"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.24.0",
+    "csv-parse": "^5.5.6",
+    "dotenv": "^16.4.5"
+  }
+}
