@@ -1,10 +1,9 @@
 name: Generate SEO Pages
-
 on:
   push:
     paths:
-      - "targets.csv"        # runs when you update the CSV
-  workflow_dispatch:         # lets you trigger manually from GitHub UI
+      - "targets.csv"
+  workflow_dispatch:
     inputs:
       limit:
         description: "Max pages to generate (leave blank for all)"
@@ -14,26 +13,22 @@ on:
         description: "Regenerate one specific slug (leave blank to skip)"
         required: false
         default: ""
-
 jobs:
   generate:
     runs-on: ubuntu-latest
     permissions:
-      contents: write        # needed to commit HTML files back to the repo
-
+      contents: write
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
-
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: "24"
-
       - name: Install dependencies
         run: npm install
-
       - name: Generate pages
+        continue-on-error: true
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
@@ -42,10 +37,10 @@ jobs:
           elif [ -n "${{ github.event.inputs.limit }}" ]; then
             node batch.js --limit "${{ github.event.inputs.limit }}"
           else
-            node batch.js
+            node batch.js --skip-existing
           fi
-
       - name: Commit generated pages
+        if: always()
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
