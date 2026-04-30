@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-
+ 
 /**
  * Field-Built Systems — Programmatic SEO Page Generator
  *
@@ -11,16 +11,16 @@
  *
  * Setup: npm install @anthropic-ai/sdk csv-parse dotenv
  */
-
+ 
 import Anthropic from "@anthropic-ai/sdk";
 import { parse }  from "csv-parse/sync";
 import fs         from "fs";
 import path       from "path";
 import { fileURLToPath } from "url";
 import "dotenv/config";
-
+ 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
+ 
 const CONFIG = {
   csvPath:   path.join(__dirname, "targets.csv"),
   outputDir: path.join(__dirname, "docs"),
@@ -30,7 +30,7 @@ const CONFIG = {
   maxTokens: 4000,
   rate: { delayBetweenMs: 3200, retryDelayMs: 15000, maxRetries: 3 },
 };
-
+ 
 const args          = process.argv.slice(2);
 const flag          = (f) => { const i = args.indexOf(f); return i !== -1 ? args[i + 1] : null; };
 const hasFlag       = (f) => args.includes(f);
@@ -39,11 +39,11 @@ const TARGET_SLUG   = flag("--slug")  ?? null;
 const CHUNK_INDEX   = flag("--chunk") ? parseInt(flag("--chunk")) : null;
 const CHUNK_TOTAL   = flag("--of")    ? parseInt(flag("--of"))    : null;
 const SKIP_EXISTING = hasFlag("--skip-existing");
-
+ 
 const sleep     = (ms) => new Promise((r) => setTimeout(r, ms));
 const ensureDir = (d)  => { if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true }); };
 const outPath   = (s)  => path.join(CONFIG.outputDir, `${s}.html`);
-
+ 
 function log(msg) {
   const line = `[${new Date().toISOString()}] ${msg}`;
   console.log(line);
@@ -54,12 +54,12 @@ function logError(slug, err) {
   console.error(line);
   fs.appendFileSync(CONFIG.errorFile, line + "\n");
 }
-
+ 
 // ─── Derived page values ───────────────────────────────────────────────────
-
+ 
 function derivePageValues(row) {
   const { vertical, city, state, page_type, angle, slug } = row;
-
+ 
   const angleLabel = {
     "general":                `${vertical} companies`,
     "small-business":         `small ${vertical} companies`,
@@ -69,68 +69,79 @@ function derivePageValues(row) {
     "switching-jobber":       `${vertical} companies switching from Jobber`,
     "new-business":           `new ${vertical} companies`,
   }[angle] ?? `${vertical} companies`;
-
+ 
   const h1 = {
     "crm":           `Best CRM for ${angleLabel} in ${city}, ${state}`,
     "automation":    `Automation Software for ${angleLabel} in ${city}, ${state}`,
     "ai-chat":       `AI Chat Agent for ${angleLabel} in ${city}, ${state}`,
     "lead-followup": `Lead Follow-Up System for ${angleLabel} in ${city}, ${state}`,
     "reviews":       `Google Review Automation for ${angleLabel} in ${city}, ${state}`,
+    "voice-ai":      `AI Voice Receptionist for ${angleLabel} in ${city}, ${state}`,
   }[page_type] ?? `Automation System for ${angleLabel} in ${city}, ${state}`;
-
+ 
   const midCol =
     angle === "switching-servicetitan" ? "ServiceTitan" :
     angle === "switching-jobber"       ? "Jobber"       : "Generic CRM";
-
+ 
   const ctaH2 = {
     "crm":           `Ready to Replace Your CRM With Something Built for ${vertical} in ${city}?`,
     "automation":    `Ready to Put Your ${vertical} Business in ${city} on Autopilot?`,
     "ai-chat":       `Ready to Stop Missing Calls From ${city} ${vertical} Customers?`,
     "lead-followup": `Ready to Stop Losing ${city} ${vertical} Leads to Slow Follow-Up?`,
     "reviews":       `Ready to Build Your ${vertical} Reputation in ${city} on Autopilot?`,
+    "voice-ai":      `Ready to Stop Losing ${city} ${vertical} Calls to Voicemail?`,
   }[page_type] ?? `Ready to See What This Looks Like for Your ${vertical} Business?`;
-
+ 
   const serviceDesc = {
     "crm":           `Done-for-you CRM for ${vertical} businesses in ${city}. Built on GoHighLevel with pipeline, lead follow-up, appointment reminders, and AI chat. Live in 10-14 days.`,
     "automation":    `Done-for-you automation for ${vertical} companies in ${city}. AI chat, review requests, appointment confirmations, and lead follow-up. Live in 10-14 days.`,
     "ai-chat":       `AI chat agent for ${vertical} businesses in ${city}. Answers leads, books appointments, sends confirmations. Live in 10-14 days.`,
     "lead-followup": `Done-for-you lead follow-up for ${vertical} companies in ${city}. Automated text and email sequences on GoHighLevel. Live in 10-14 days.`,
     "reviews":       `Google review automation for ${vertical} businesses in ${city}. Satisfaction check after every job — happy customers go to Google, unhappy ones come to you first. Live in 10-14 days.`,
+    "voice-ai":      `AI voice receptionist for ${vertical} businesses in ${city}. Answers calls, qualifies leads, and books appointments 24/7 — installed and live in 10-14 days.`,
   }[page_type] ?? `Done-for-you automation for ${vertical} businesses in ${city}. Live in 10-14 days.`;
-
+ 
   return { h1, midCol, ctaH2, serviceDesc, slug, vertical, city, state, page_type, angle };
 }
-
+ 
 // ─── Prompt — asks only for content, returns JSON ─────────────────────────
-
+ 
 function buildPrompt(row) {
   const { vertical, city, state, page_type, angle } = row;
   const { h1, midCol } = derivePageValues(row);
-
+ 
   const cardRules = page_type === "reviews" ? `
 All 4 cards cover the two-part review mechanism:
 - Card 1: satisfaction check fires after job close automatically — always before any review request goes out
 - Card 2: positive response sends Google review link; negative sends private form to owner before anything is public. ALWAYS describe both sides together — they are one mechanism.
 - Card 3: reviews build from every job without manual effort or awkward end-of-job conversations
-- Card 4: request fires right after job close while the experience is still fresh` : `
+- Card 4: request fires right after job close while the experience is still fresh`
+  : page_type === "voice-ai" ? `
+All 4 cards cover what the AI voice receptionist actually does on a call:
+- Card 1: answers every call instantly — no voicemail, no missed lead, even at 10pm on a Saturday
+- Card 2: qualifies the caller — asks the right questions, captures job details, determines urgency
+- Card 3: books the appointment directly on your calendar without you picking up the phone
+- Card 4: sends the caller a confirmation text after the call so they feel taken care of immediately`
+  : `
 - Card 1 (required): appointment sequence — booked→confirmation, 24hr→reminder, day-of→en-route text. Frame as no-shows going down, not a feature list.
 - Card 2 (required): review protection — satisfaction check after job close; positive→Google link; negative→private form to owner before it goes public. Always describe both sides together.
 - Cards 3-4: pick from AI chat (after-hours leads), AI voice receptionist, lead follow-up sequences, pipeline visibility. Outcome-focused titles only.`;
-
+ 
   const faqTopics = {
     "crm":           `Q1: Do I have to migrate my old data? Q2: Is this just GoHighLevel? (GHL is lumber, this is the house) Q3: What if my techs won't use it? Q4: Are you done after setup? (no — we stay on) Q5: How is this different from hiring a GHL consultant?`,
     "automation":    `Q1: What's automated vs still manual? Q2: Will it work with my existing tools? Q3: Do I have to learn to build automations? (no) Q4: What if something breaks on a job? (we fix it) Q5: How fast will I notice a difference?`,
     "ai-chat":       `Q1: What if a customer asks something the AI can't answer? (captures info, books callback) Q2: Will customers know it's AI? (honest answer) Q3: Can I control what it says? (yes — trained on your business) Q4: Does it work after hours? (yes — that's the point) Q5: What if a customer is angry?`,
     "lead-followup": `Q1: How fast does the first message go out? (minutes) Q2: What if someone says stop texting? (auto opt-out) Q3: Can I see what went out? (yes) Q4: What if I already have a manual process? (we replace it) Q5: How many touches before it stops?`,
     "reviews":       `Q1: What if a bad review slips through anyway? (filter reduces it, doesn't guarantee zero) Q2: Can I control who gets the check? (yes — job close trigger) Q3: How does it know when a job is done? (pipeline status) Q4: Is this Google only? (Google is the priority) Q5: What happens after negative private feedback? (comes to you, never goes public)`,
+    "voice-ai":      `Q1: Will callers know they're talking to an AI? (honest answer — most don't care if it's fast and helpful) Q2: What happens if the AI can't answer a question? (captures info, flags for callback) Q3: Can it handle angry or impatient callers? Q4: What if I already have a receptionist? (it handles overflow and after-hours) Q5: How does it know what services I offer and what to say?`,
   }[page_type] ?? `Q1-Q5: real objections from ${vertical} owners about done-for-you automation`;
-
+ 
   return `Write content for a Field-Built Systems SEO landing page. Return ONLY a valid JSON object — no markdown, no explanation.
-
+ 
 PAGE: "${h1}"
 VERTICAL: ${vertical} | CITY: ${city}, ${state} | TYPE: ${page_type} | ANGLE: ${angle}
 COMPETITOR COLUMN: ${midCol}
-
+ 
 WRITING RULES:
 - Practitioner voice — sounds like someone who ran a ${vertical} business in ${city}
 - Real local context: actual ${city} neighborhoods, seasonal patterns, local competition
@@ -141,13 +152,13 @@ WRITING RULES:
 - FBS offers: AI chat, AI voice receptionist, lead follow-up (text+email), appointment confirmations+reminders, Google review automation (two-part), CRM on GoHighLevel, done-for-you setup+support
 - At least 2 H2s must include both "${city}" and "${vertical}"
 - Include a natural link to field-built.com/services in intro_body and field-built.com/demo in solution_body using <a href="..." class="bl" rel="noopener noreferrer">anchor text</a>
-
+ 
 CARD RULES:
 ${cardRules}
-
+ 
 FAQ TOPICS:
 ${faqTopics}
-
+ 
 Return this exact JSON structure (all fields required):
 {
   "meta_title": "Title Case keyword under 55 chars",
@@ -184,12 +195,12 @@ Return this exact JSON structure (all fields required):
   ]
 }`;
 }
-
+ 
 // ─── HTML assembler — Node builds the page, model never sees this ──────────
-
+ 
 function assembleHTML(content, row) {
   const { h1, midCol, ctaH2, serviceDesc, slug, vertical, city, state, page_type } = derivePageValues(row);
-
+ 
   const faqItems = content.faqs.map((f, i) => `
     <div class="faq-item">
       <button class="faq-btn" aria-expanded="false" aria-controls="f${i+1}">
@@ -198,13 +209,13 @@ function assembleHTML(content, row) {
       </button>
       <div id="f${i+1}" class="faq-body" hidden><p>${escHtml(f.a)}</p></div>
     </div>`).join("");
-
+ 
   const faqSchema = JSON.stringify(content.faq_schema.map(f => ({
     "@type": "Question",
     "name": f.q,
     "acceptedAnswer": { "@type": "Answer", "text": f.a }
   })));
-
+ 
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -296,7 +307,7 @@ function assembleHTML(content, row) {
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":${faqSchema}}</script>
 </head>
 <body>
-
+ 
 <header style="position:fixed;top:0;left:0;right:0;z-index:100;border-bottom:1px solid rgba(255,255,255,0.07);background:rgba(8,12,20,0.92);backdrop-filter:blur(20px);height:64px;">
   <div style="max-width:1140px;margin:0 auto;padding:0 24px;height:64px;display:flex;align-items:center;justify-content:space-between;">
     <a href="https://field-built.com" style="display:flex;align-items:center;gap:12px;" rel="noopener noreferrer">
@@ -322,10 +333,10 @@ function assembleHTML(content, row) {
     <a href="https://field-built.com/book" style="display:inline-block;background:#00D4FF;border-radius:999px;padding:12px 24px;font-size:15px;font-weight:700;color:#080C14;text-align:center;" rel="noopener noreferrer">Book a Free Call</a>
   </div>
 </header>
-
+ 
 <main aria-label="Main content" style="padding-top:64px;">
-
-  <section class="hero" id="intro">
+ 
+  <section class="hero" id="hero">
     <div class="orb orb-1" aria-hidden="true"></div>
     <div class="orb orb-2" aria-hidden="true"></div>
     <div class="hero-inner">
@@ -335,7 +346,7 @@ function assembleHTML(content, row) {
       <a href="https://field-built.com/book" class="btn" rel="noopener noreferrer">Book a Free 30-Minute Call</a>
     </div>
   </section>
-
+ 
   <section class="sec" id="about">
     <div class="wrap wrap-sm">
       <span class="eyebrow">Who This Is For</span>
@@ -343,7 +354,7 @@ function assembleHTML(content, row) {
       ${content.intro_body}
     </div>
   </section>
-
+ 
   <section class="sec sec-alt" id="problem">
     <div class="wrap wrap-sm">
       <span class="eyebrow">The Real Cost</span>
@@ -351,7 +362,7 @@ function assembleHTML(content, row) {
       ${content.problem_body}
     </div>
   </section>
-
+ 
   <section class="sec" id="solution">
     <div class="wrap wrap-sm">
       <span class="eyebrow">What We Install</span>
@@ -359,7 +370,7 @@ function assembleHTML(content, row) {
       ${content.solution_body}
     </div>
   </section>
-
+ 
   <section class="sec sec-card" id="features">
     <div class="wrap">
       <span class="eyebrow">What's Included</span>
@@ -374,7 +385,7 @@ function assembleHTML(content, row) {
       </div>
     </div>
   </section>
-
+ 
   <section class="sec sec-alt" id="compare">
     <div class="wrap">
       <span class="eyebrow">How It Stacks Up</span>
@@ -396,7 +407,7 @@ function assembleHTML(content, row) {
       </div>
     </div>
   </section>
-
+ 
   <section class="sec" id="faq">
     <div class="wrap wrap-sm">
       <span class="eyebrow">FAQ</span>
@@ -406,7 +417,7 @@ function assembleHTML(content, row) {
       </div>
     </div>
   </section>
-
+ 
   <section class="cta-sec" id="cta">
     <div class="wrap">
       <h2>${escHtml(ctaH2)}</h2>
@@ -415,9 +426,9 @@ function assembleHTML(content, row) {
       <p style="font-size:14px;margin-top:20px;opacity:.7;">Most clients are live within 10&ndash;14 days.</p>
     </div>
   </section>
-
+ 
 </main>
-
+ 
 <footer style="background:#080C14;border-top:1px solid rgba(255,255,255,0.07);padding:48px 24px;">
   <div style="max-width:1140px;margin:0 auto;display:grid;grid-template-columns:2fr 1fr 1fr;gap:32px;">
     <div>
@@ -448,7 +459,7 @@ function assembleHTML(content, row) {
   </div>
   <div style="max-width:1140px;margin:32px auto 0;padding-top:24px;border-top:1px solid rgba(255,255,255,0.07);text-align:center;font-size:13px;color:#8B9AB4;">&copy; 2026 Field-Built Systems. All rights reserved.</div>
 </footer>
-
+ 
 <script>
 (function(){
   var t=document.getElementById('nt'),m=document.getElementById('nm');
@@ -469,13 +480,13 @@ function assembleHTML(content, row) {
   });
 })();
 </script>
-
+ 
 </body>
 </html>`;
 }
-
+ 
 // ─── HTML escape helpers ───────────────────────────────────────────────────
-
+ 
 function escHtml(s) {
   return String(s)
     .replace(/&/g, "&amp;")
@@ -486,13 +497,13 @@ function escHtml(s) {
 function escAttr(s) {
   return String(s).replace(/"/g, "&quot;").replace(/&/g, "&amp;");
 }
-
+ 
 // ─── API call ──────────────────────────────────────────────────────────────
-
+ 
 async function generateContent(client, row) {
   const prompt = buildPrompt(row);
   let attempt  = 0;
-
+ 
   while (attempt < CONFIG.rate.maxRetries) {
     try {
       const response = await client.messages.create({
@@ -500,7 +511,7 @@ async function generateContent(client, row) {
         max_tokens: CONFIG.maxTokens,
         messages:   [{ role: "user", content: prompt }],
       });
-
+ 
       const raw = response.content
         .filter((b) => b.type === "text")
         .map((b) => b.text)
@@ -509,9 +520,9 @@ async function generateContent(client, row) {
         .replace(/^```\s*/i, "")
         .replace(/\s*```\s*$/i, "")
         .trim();
-
+ 
       return JSON.parse(raw);
-
+ 
     } catch (err) {
       attempt++;
       const retry = err.status === 429 || err.status >= 500;
@@ -524,55 +535,55 @@ async function generateContent(client, row) {
     }
   }
 }
-
+ 
 // ─── Main ──────────────────────────────────────────────────────────────────
-
+ 
 async function main() {
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-
+ 
   if (!fs.existsSync(CONFIG.csvPath)) {
     console.error(`targets.csv not found at ${CONFIG.csvPath}`);
     process.exit(1);
   }
-
+ 
   ensureDir(CONFIG.outputDir);
-
+ 
   const raw   = fs.readFileSync(CONFIG.csvPath, "utf8");
   let rows    = parse(raw, { columns: true, skip_empty_lines: true, trim: true });
   const total = rows.length;
-
+ 
   if (TARGET_SLUG) {
     rows = rows.filter((r) => r.slug === TARGET_SLUG);
     if (!rows.length) { console.error(`No row found: ${TARGET_SLUG}`); process.exit(1); }
   }
-
+ 
   if (CHUNK_INDEX !== null && CHUNK_TOTAL !== null) {
     rows = rows.filter((_, i) => i % CHUNK_TOTAL === CHUNK_INDEX - 1);
     log(`Chunk ${CHUNK_INDEX}/${CHUNK_TOTAL}: ${rows.length} rows`);
   }
-
+ 
   if (LIMIT) rows = rows.slice(0, LIMIT);
-
+ 
   if (SKIP_EXISTING) {
     const before = rows.length;
     rows = rows.filter((r) => !fs.existsSync(outPath(r.slug)));
     log(`Skip-existing: ${before - rows.length} done, ${rows.length} remaining`);
   }
-
+ 
   log(`Starting: ${rows.length} pages (${total} in CSV)`);
-
+ 
   let success = 0, failed = 0;
-
+ 
   for (let i = 0; i < rows.length; i++) {
     const row  = rows[i];
     const slug = row.slug;
-
+ 
     log(`[${i + 1}/${rows.length}] ${slug}`);
-
+ 
     try {
       const content = await generateContent(client, row);
       const html    = assembleHTML(content, row);
-
+ 
       fs.writeFileSync(outPath(slug), html, "utf8");
       log(`  ✓ ${slug}`);
       success++;
@@ -580,12 +591,13 @@ async function main() {
       logError(slug, err);
       failed++;
     }
-
+ 
     if (i < rows.length - 1) await sleep(CONFIG.rate.delayBetweenMs);
   }
-
+ 
   log(`Done. ✓ ${success}  ✗ ${failed}`);
   if (failed > 0) { log(`Check batch-errors.log`); process.exit(1); }
 }
-
+ 
 main().catch((err) => { console.error("Fatal:", err); process.exit(1); });
+ 
