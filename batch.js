@@ -589,6 +589,3 @@ async function main() {
 }
 
 main().catch((err) => { console.error("Fatal:", err); process.exit(1); });
-git add .github/workflows/generate-seo-pages.yml
-git commit -m "fix: restore SEO page generation workflow"
-git push
