@@ -9759,6 +9759,3 @@ vertical,city,state,page_type,angle,slug
 "Junk Removal","Boise","ID","ai-chat","general","ai-chat-junk-removal-boise-id"
 "Junk Removal","Boise","ID","lead-followup","general","lead-followup-junk-removal-boise-id"
 "Junk Removal","Boise","ID","reviews","general","reviews-junk-removal-boise-id"
-if (limit) {
-  targets = targets.slice(0, limit);
-}
