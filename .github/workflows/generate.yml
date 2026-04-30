@@ -45,6 +45,9 @@ jobs:
             node batch.js --skip-existing
           fi
 
+      - name: Generate sitemap
+        run: node generate-sitemap.js
+
       - name: Commit and push
         run: |
           git config user.name "github-actions[bot]"
