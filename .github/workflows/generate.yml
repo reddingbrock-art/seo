@@ -1,5 +1,5 @@
 name: Generate SEO Pages
-
+ 
 on:
   push:
     paths:
@@ -14,11 +14,11 @@ on:
         description: 'Number of parallel workers (default: 10)'
         required: false
         default: '10'
-
+ 
 concurrency:
   group: generate-${{ github.ref }}
   cancel-in-progress: true
-
+ 
 jobs:
   # ── Single-slug regeneration ──────────────────────────────────────────────
   single:
@@ -26,19 +26,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
+ 
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
-
+ 
       - run: npm install
-
+ 
       - name: Generate single page
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: node batch.js --slug "${{ github.event.inputs.slug }}"
-
+ 
       - name: Commit output
         run: |
           git config user.name  "github-actions[bot]"
@@ -46,7 +45,7 @@ jobs:
           git add docs/
           git diff --staged --quiet || git commit -m "regen: ${{ github.event.inputs.slug }}"
           git push
-
+ 
   # ── Full run — split into N parallel chunks ───────────────────────────────
   split:
     if: ${{ github.event.inputs.slug == '' }}
@@ -65,7 +64,7 @@ jobs:
             console.log(JSON.stringify({chunk: arr}));
           ")
           echo "matrix=$MATRIX" >> $GITHUB_OUTPUT
-
+ 
   generate:
     needs: split
     if: ${{ github.event.inputs.slug == '' }}
@@ -73,17 +72,16 @@ jobs:
     strategy:
       fail-fast: false          # one chunk failing won't cancel the others
       matrix: ${{ fromJson(needs.split.outputs.matrix) }}
-
+ 
     steps:
       - uses: actions/checkout@v4
-
+ 
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
-
+ 
       - run: npm install
-
+ 
       - name: Generate chunk ${{ matrix.chunk }} of ${{ needs.split.outputs.chunks }}
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -92,28 +90,28 @@ jobs:
             --chunk ${{ matrix.chunk }} \
             --of ${{ needs.split.outputs.chunks }} \
             --skip-existing
-
+ 
       - name: Upload chunk artifact
         uses: actions/upload-artifact@v4
         with:
           name: pages-chunk-${{ matrix.chunk }}
           path: docs/
           retention-days: 1
-
+ 
   # ── Merge all chunks and commit ───────────────────────────────────────────
   commit:
     needs: generate
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
+ 
       - name: Download all chunk artifacts
         uses: actions/download-artifact@v4
         with:
           pattern: pages-chunk-*
           path: docs/
           merge-multiple: true
-
+ 
       - name: Commit all pages
         run: |
           git config user.name  "github-actions[bot]"
