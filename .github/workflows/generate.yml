@@ -1,87 +1,131 @@
-name: Generate SEO Pages
- 
 on:
   push:
     paths:
       - 'targets.csv'
+
   workflow_dispatch:
     inputs:
       slug:
-        description: 'Regenerate a single slug (leave blank for full run)'
+        description: 'Regenerate a single slug (leave blank unless running one page)'
         required: false
         default: ''
+
+      sample_count:
+        description: 'Generate a sample number of pages (leave blank for full run)'
+        required: false
+        default: ''
+
       chunks:
-        description: 'Number of parallel workers (default: 10)'
+        description: 'Number of parallel workers for full run only'
         required: false
         default: '10'
- 
+
 concurrency:
   group: generate-${{ github.ref }}
   cancel-in-progress: true
- 
+
 jobs:
   # ── Single-slug regeneration ──────────────────────────────────────────────
   single:
-    if: ${{ github.event.inputs.slug != '' }}
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.slug != '' }}
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
- 
+
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
- 
+
       - run: npm install
- 
+
       - name: Generate single page
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-        run: node batch.js --slug "${{ github.event.inputs.slug }}"
- 
+        run: node batch.js --slug "${{ inputs.slug }}"
+
       - name: Commit output
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add docs/
-          git diff --staged --quiet || git commit -m "regen: ${{ github.event.inputs.slug }}"
+          git diff --staged --quiet || git commit -m "regen: ${{ inputs.slug }}"
           git push
- 
-  # ── Full run — split into N parallel chunks ───────────────────────────────
-  split:
-    if: ${{ github.event.inputs.slug == '' }}
+
+  # ── Sample run ────────────────────────────────────────────────────────────
+  sample:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.slug == '' && inputs.sample_count != '' }}
     runs-on: ubuntu-latest
-    outputs:
-      matrix: ${{ steps.set-matrix.outputs.matrix }}
-      chunks: ${{ steps.set-matrix.outputs.chunks }}
-    steps:
-      - id: set-matrix
-        run: |
-          N=${{ github.event.inputs.chunks || '10' }}
-          echo "chunks=$N" >> $GITHUB_OUTPUT
-          MATRIX=$(node -e "
-            const n = parseInt('$N');
-            const arr = Array.from({length: n}, (_, i) => i + 1);
-            console.log(JSON.stringify({chunk: arr}));
-          ")
-          echo "matrix=$MATRIX" >> $GITHUB_OUTPUT
- 
-  generate:
-    needs: split
-    if: ${{ github.event.inputs.slug == '' }}
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false          # one chunk failing won't cancel the others
-      matrix: ${{ fromJson(needs.split.outputs.matrix) }}
- 
+
     steps:
       - uses: actions/checkout@v4
- 
+
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
- 
+
       - run: npm install
- 
+
+      - name: Generate sample pages
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: node batch.js --limit "${{ inputs.sample_count }}" --skip-existing
+
+      - name: Commit sample output
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/
+          git diff --staged --quiet && echo "Nothing to commit" && exit 0
+          COUNT=$(git diff --staged --name-only | wc -l | tr -d ' ')
+          git commit -m "test: generate ${COUNT} sample SEO pages [skip ci]"
+          git push
+
+  # ── Full run — split into N parallel chunks ───────────────────────────────
+  split:
+    if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.slug == '' && inputs.sample_count == '') }}
+    runs-on: ubuntu-latest
+
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+      chunks: ${{ steps.set-matrix.outputs.chunks }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - id: set-matrix
+        run: |
+          N="${{ inputs.chunks || '10' }}"
+          echo "chunks=$N" >> $GITHUB_OUTPUT
+          MATRIX=$(node -e "
+            const n = parseInt('$N', 10);
+            const arr = Array.from({ length: n }, (_, i) => i + 1);
+            console.log(JSON.stringify({ chunk: arr }));
+          ")
+          echo "matrix=$MATRIX" >> $GITHUB_OUTPUT
+
+  generate:
+    needs: split
+    if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.slug == '' && inputs.sample_count == '') }}
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.split.outputs.matrix) }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - run: npm install
+
       - name: Generate chunk ${{ matrix.chunk }} of ${{ needs.split.outputs.chunks }}
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -90,28 +134,30 @@ jobs:
             --chunk ${{ matrix.chunk }} \
             --of ${{ needs.split.outputs.chunks }} \
             --skip-existing
- 
+
       - name: Upload chunk artifact
         uses: actions/upload-artifact@v4
         with:
           name: pages-chunk-${{ matrix.chunk }}
           path: docs/
           retention-days: 1
- 
+
   # ── Merge all chunks and commit ───────────────────────────────────────────
   commit:
     needs: generate
+    if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.slug == '' && inputs.sample_count == '') }}
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
- 
+
       - name: Download all chunk artifacts
         uses: actions/download-artifact@v4
         with:
           pattern: pages-chunk-*
           path: docs/
           merge-multiple: true
- 
+
       - name: Commit all pages
         run: |
           git config user.name  "github-actions[bot]"
@@ -121,3 +167,21 @@ jobs:
           COUNT=$(git diff --staged --name-only | wc -l | tr -d ' ')
           git commit -m "chore: generate ${COUNT} SEO pages [skip ci]"
           git push
+
+Important: this assumes your batch.js can handle:
+
+node batch.js --limit 25 --skip-existing
+
+So your batch.js needs logic like:
+
+const limitArgIndex = process.argv.indexOf('--limit');
+
+let limit = null;
+
+if (limitArgIndex !== -1) {
+  limit = Number(process.argv[limitArgIndex + 1]);
+
+  if (!Number.isInteger(limit) || limit <= 0) {
+    throw new Error('--limit must be a positive number');
+  }
+}
