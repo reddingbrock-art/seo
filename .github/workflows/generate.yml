@@ -1,42 +1,42 @@
 name: Generate SEO Pages
- 
+
 permissions:
   contents: write
- 
+
 on:
   push:
     paths:
       - 'targets.csv'
- 
+
   workflow_dispatch:
     inputs:
       slug:
         description: 'Regenerate a single slug (leave blank for full run)'
         required: false
         default: ''
- 
+
       sample_count:
         description: 'Generate a sample number of pages (leave blank for full run)'
         required: false
         default: ''
- 
+
 concurrency:
   group: generate-${{ github.ref }}
   cancel-in-progress: true
- 
+
 jobs:
   generate:
     runs-on: ubuntu-latest
- 
+
     steps:
       - uses: actions/checkout@v4
- 
+
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
- 
+
       - run: npm install
- 
+
       - name: Generate pages
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -48,14 +48,3 @@ jobs:
           else
             node batch.js --skip-existing
           fi
- 
-      - name: Commit output
-        run: |
-          git config user.name  "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add docs/
-          git diff --staged --quiet && echo "Nothing to commit" && exit 0
-          COUNT=$(git diff --staged --name-only | wc -l | tr -d ' ')
-          git commit -m "chore: generate ${COUNT} SEO pages [skip ci]"
-          git push
- 
