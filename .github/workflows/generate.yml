@@ -1,3 +1,5 @@
+name: Generate SEO Pages
+
 on:
   push:
     paths:
@@ -27,7 +29,7 @@ concurrency:
 jobs:
   # ── Single-slug regeneration ──────────────────────────────────────────────
   single:
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.slug != '' }}
+    if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.slug != '' }}
     runs-on: ubuntu-latest
 
     steps:
@@ -42,19 +44,19 @@ jobs:
       - name: Generate single page
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-        run: node batch.js --slug "${{ inputs.slug }}"
+        run: node batch.js --slug "${{ github.event.inputs.slug }}"
 
       - name: Commit output
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add docs/
-          git diff --staged --quiet || git commit -m "regen: ${{ inputs.slug }}"
+          git diff --staged --quiet || git commit -m "regen: ${{ github.event.inputs.slug }}"
           git push
 
   # ── Sample run ────────────────────────────────────────────────────────────
   sample:
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.slug == '' && inputs.sample_count != '' }}
+    if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.slug == '' && github.event.inputs.sample_count != '' }}
     runs-on: ubuntu-latest
 
     steps:
@@ -69,7 +71,7 @@ jobs:
       - name: Generate sample pages
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-        run: node batch.js --limit "${{ inputs.sample_count }}" --skip-existing
+        run: node batch.js --limit "${{ github.event.inputs.sample_count }}" --skip-existing
 
       - name: Commit sample output
         run: |
@@ -83,7 +85,7 @@ jobs:
 
   # ── Full run — split into N parallel chunks ───────────────────────────────
   split:
-    if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.slug == '' && inputs.sample_count == '') }}
+    if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.slug == '' && github.event.inputs.sample_count == '') }}
     runs-on: ubuntu-latest
 
     outputs:
@@ -99,7 +101,7 @@ jobs:
 
       - id: set-matrix
         run: |
-          N="${{ inputs.chunks || '10' }}"
+          N="${{ github.event.inputs.chunks || '10' }}"
           echo "chunks=$N" >> $GITHUB_OUTPUT
           MATRIX=$(node -e "
             const n = parseInt('$N', 10);
@@ -110,7 +112,7 @@ jobs:
 
   generate:
     needs: split
-    if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.slug == '' && inputs.sample_count == '') }}
+    if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.slug == '' && github.event.inputs.sample_count == '') }}
     runs-on: ubuntu-latest
 
     strategy:
@@ -145,7 +147,7 @@ jobs:
   # ── Merge all chunks and commit ───────────────────────────────────────────
   commit:
     needs: generate
-    if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.slug == '' && inputs.sample_count == '') }}
+    if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.slug == '' && github.event.inputs.sample_count == '') }}
     runs-on: ubuntu-latest
 
     steps:
@@ -167,21 +169,3 @@ jobs:
           COUNT=$(git diff --staged --name-only | wc -l | tr -d ' ')
           git commit -m "chore: generate ${COUNT} SEO pages [skip ci]"
           git push
-
-Important: this assumes your batch.js can handle:
-
-node batch.js --limit 25 --skip-existing
-
-So your batch.js needs logic like:
-
-const limitArgIndex = process.argv.indexOf('--limit');
-
-let limit = null;
-
-if (limitArgIndex !== -1) {
-  limit = Number(process.argv[limitArgIndex + 1]);
-
-  if (!Number.isInteger(limit) || limit <= 0) {
-    throw new Error('--limit must be a positive number');
-  }
-}
