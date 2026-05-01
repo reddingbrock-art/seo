@@ -35,7 +35,7 @@ const CONFIG = {
   model:      "claude-opus-4-6",
   maxTokens:  8000,
   rate: {
-    delayBetweenMs: 3200,   // ~18 req/min — safe under tier limits
+    delayBetweenMs: 100,   // ~18 req/min — safe under tier limits
     retryDelayMs:   15000,  // 15s back-off on 429/500
     maxRetries:     3,
   },
