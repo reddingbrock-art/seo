@@ -174,7 +174,7 @@ PAGE STRUCTURE — FOLLOW EXACTLY, IN ORDER
 
 8. CTA SECTION
    - H2: "Ready to See What This Looks Like for Your ${vertical} Business?"
-   - Low-commitment framing: "30 minutes. No pitch deck. No pressure."
+   - Low-commitment framing: "30 minutes. No pressure."
    - Button: "Book a Free 30-Minute Call" → https://field-built.com/book
    - One line of reassurance beneath: "Most clients are live within 10–14 days."
 
@@ -523,8 +523,8 @@ async function main() {
       await sleep(CONFIG.rate.delayBetweenMs);
     }
 
-    // Commit every 50 pages so progress is never lost if the run dies
-    if ((i + 1) % 50 === 0) {
+    // Commit every 10 pages so progress is never lost if the run dies
+    if ((i + 1) % 10 === 0) {
       await commitProgress(i + 1);
     }
   }
