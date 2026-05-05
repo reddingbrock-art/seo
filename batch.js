@@ -33,7 +33,7 @@ const CONFIG = {
   logFile:    path.join(__dirname, "batch.log"),
   errorFile:  path.join(__dirname, "batch-errors.log"),
   cname:      "local.field-built.com",   // GitHub Pages custom domain — written on every run
-  model:      "claude-sonnet-4-5",
+  model:      "claude-haiku-4-5-20251001",
   maxTokens:  8000,
   rate: {
     delayBetweenMs: 100,    // Tier 2: 2,000 req/min — generation time is the real bottleneck
