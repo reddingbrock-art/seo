@@ -33,11 +33,11 @@ const CONFIG = {
   logFile:    path.join(__dirname, "batch.log"),
   errorFile:  path.join(__dirname, "batch-errors.log"),
   cname:      "local.field-built.com",   // GitHub Pages custom domain — written on every run
-  model:      "claude-opus-4-6",
+  model:      "claude-sonnet-4-5",
   maxTokens:  8000,
   rate: {
-    delayBetweenMs: 3200,   // ~18 req/min — safe under tier limits
-    retryDelayMs:   15000,  // 15s back-off on 429/500
+    delayBetweenMs: 100,    // Tier 2: 2,000 req/min — generation time is the real bottleneck
+    retryDelayMs:   15000,
     maxRetries:     3,
   },
 };
@@ -561,7 +561,6 @@ async function main() {
       failed++;
     }
 
-    // Rate limit delay (skip after last item)
     if (i < rows.length - 1) {
       await sleep(CONFIG.rate.delayBetweenMs);
     }
