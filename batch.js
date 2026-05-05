@@ -26,7 +26,7 @@ const CONFIG = {
   logFile:   path.join(__dirname, "batch.log"),
   errorFile: path.join(__dirname, "batch-errors.log"),
   model:     "claude-haiku-4-5-20251001",
-  maxTokens: 2000,
+  maxTokens: 2500,
   rate: { delayBetweenMs: 200, retryDelayMs: 8000, maxRetries: 3 },
 };
 
@@ -125,6 +125,39 @@ function buildContentPrompt({ vertical, city, state, page_type, h1 }) {
     "reviews":       `"What if a customer leaves a bad review?", "Does the AI reply post automatically or do I approve it first?", "Which platforms does it monitor?", "How does it know when a job is done?"`,
   }[page_type] ?? `"Do I have to learn new software?", "What if I'm already using GoHighLevel?", "How is this different from buying a CRM?", "What happens after setup?"`;
 
+  const schema = {
+    metaTitle:         "<=55 chars Title Case. Keyword + | Field-Built Systems",
+    metaDesc:          "140-155 chars. Keyword, city, outcome, soft CTA",
+    heroSubhead:       "One line. Pain + delivery. <=20 words",
+    introParagraphs:   ["p1: who this is for, 1-15 trucks, $300K-$5M revenue", "p2: why now, why this city"],
+    problemHeading:    "H2. Keyword-rich. Include city and vertical",
+    problemParagraphs: [
+      `60-80 words. Specific operational pain for ${vertical} in ${city}. Real stakes. No solution language.`,
+      `60-80 words. What staying stuck costs — lost jobs, competitors pulling ahead. Name real ${city} market dynamics.`
+    ],
+    solutionHeading:   "H2. Keyword-rich. Include city and vertical",
+    solutionBody:      "2-3 paragraphs separated by \n\n. Done-for-you. GoHighLevel + AI. 10-14 days. Use keyword naturally.",
+    cityContext:       `80-100 words. Why ${city} ${vertical} businesses need this now. Seasonal demand, local competition density, neighborhood-level conditions. Local knowledge tone.`,
+    featuresHeading:   "H2. Keyword-rich. Include city and vertical",
+    cards: [
+      { title: `Specific capability for ${page_type} / ${vertical}`, body: "2-3 sentences. Concrete outcome." },
+      { title: "...", body: "..." },
+      { title: "...", body: "..." },
+      { title: "...", body: "..." }
+    ],
+    tableHeading:      "H2. Comparison angle. Keyword-rich",
+    whyFBSHeading:     `H2. Why Field-Built for ${vertical} in ${city}`,
+    whyFBSBody:        "2 paragraphs separated by \n\n. Done-for-you vs buying software, GoHighLevel expertise, field service specialization, post-launch support. 100-120 words total.",
+    faqHeading:        "H2. Include city and vertical",
+    faqs: [
+      { q: `Pick from: ${faqBank}`, a: "Complete answer, 50-70 words. No restatement." },
+      { q: "...", a: "..." },
+      { q: "...", a: "..." },
+      { q: "...", a: "..." },
+      { q: "...", a: "..." }
+    ]
+  };
+
   return `Write copy for a Field-Built Systems landing page. Return only valid JSON, no markdown.
 
 VERTICAL: ${vertical} | CITY: ${city}, ${state} | PAGE TYPE: ${page_type}
@@ -136,12 +169,11 @@ RULES:
 - Real ${city} context: actual neighborhoods, seasonal patterns, local competition
 - Never invent stats. Use "most", "faster than", "significantly more"
 - Never: "game-changer", "seamless", "leverage", "supercharge", "streamline"
-- Problem section: one paragraph, pure pain, no solution language
+- problemParagraphs: pure pain only, zero solution language
 - Solution: done-for-you framing — "we install" not "you'll configure"
-- For reputation/reviews content: every customer gets asked, every review gets answered.
-  AI drafts the reply, owner approves. Never imply filtering who gets the review link.
+- Reviews content: every customer gets asked, every review gets answered. AI drafts reply, owner approves. Never imply filtering.
 
-{"metaTitle":"<=55 chars Title Case. Keyword + | Field-Built Systems","metaDesc":"140-155 chars. Keyword, city, outcome, soft CTA","heroSubhead":"One line. Pain + delivery. <=20 words","introParagraphs":["p1","p2"],"problemHeading":"H2. Keyword-rich. Include city and vertical","problemBody":"One paragraph. Pain and stakes. No solution.","solutionHeading":"H2. Keyword-rich. Include city and vertical","solutionBody":"2-3 short paragraphs with \\n\\n. Done-for-you. GoHighLevel + AI. 10-14 days.","featuresHeading":"H2. Keyword-rich. Include city and vertical","cards":[{"title":"Specific capability, not generic","body":"2-3 sentences specific to ${page_type} and ${vertical}"},{"title":"...","body":"..."},{"title":"...","body":"..."},{"title":"...","body":"..."}],"tableHeading":"H2. Comparison angle. Keyword-rich","faqHeading":"H2. Include city and vertical","faqs":[{"q":"Choose from: ${faqBank}","a":"Direct answer. No restatement. No fluff."},{"q":"...","a":"..."},{"q":"...","a":"..."},{"q":"...","a":"..."}]}`;
+${JSON.stringify(schema, null, 0)}`;
 }
 
 // ─── API call ──────────────────────────────────────────────────────────────
@@ -251,13 +283,13 @@ header{position:fixed;top:0;left:0;right:0;z-index:100;height:64px;display:flex;
 .nav-links{display:flex;gap:28px;list-style:none}
 .nav-links a{color:var(--muted);font-size:15px;font-weight:500;transition:color .2s}
 .nav-links a:hover{color:var(--cyan)}
-.nav-cta{background:linear-gradient(90deg,var(--cyan),var(--violet));color:#fff;padding:10px 22px;border-radius:999px;font-size:14px;font-weight:600;white-space:nowrap}
+.nav-cta{background:#00D4FF;color:#080C14;padding:10px 22px;border-radius:999px;font-size:14px;font-weight:600;white-space:nowrap}
 .hamburger{display:none;background:none;border:none;cursor:pointer;flex-direction:column;gap:5px;padding:8px}
 .hamburger span{display:block;width:24px;height:2px;background:#F1F5F9;border-radius:2px}
 .mobile-menu{display:none;position:fixed;top:64px;left:0;right:0;background:var(--bg-card);border-bottom:1px solid var(--border);padding:20px 24px;flex-direction:column;gap:16px}
 .mobile-menu a{color:var(--muted);font-size:16px;font-weight:500;padding:8px 0}
 .mobile-menu[data-open=true]{display:flex}
-.mob-cta{background:linear-gradient(90deg,var(--cyan),var(--violet))!important;color:#fff!important;padding:12px 22px!important;border-radius:999px;text-align:center;font-weight:600!important}
+.mob-cta{background:#00D4FF!important;color:#080C14!important;padding:12px 22px!important;border-radius:999px;text-align:center;font-weight:600!important}
 .container{max-width:1100px;margin:0 auto;padding:0 24px}
 .narrow{max-width:780px;margin:0 auto;padding:0 24px}
 main>section{padding:88px 0}
@@ -278,7 +310,7 @@ p:last-child{margin-bottom:0}
 .badge{display:inline-block;margin-bottom:28px;border:1px solid rgba(27,152,224,.4);border-radius:999px;background:rgba(27,152,224,.1);padding:6px 18px;font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase}
 .hero h1{margin-bottom:24px}
 .hero p{font-size:18px;max-width:520px;margin:0 auto 36px}
-.btn{display:inline-block;background:linear-gradient(90deg,var(--cyan),var(--violet));color:#fff;border-radius:999px;font-weight:700;border:none;cursor:pointer;transition:transform .2s,box-shadow .2s}
+.btn{display:inline-block;background:#00D4FF;color:#080C14;border-radius:999px;font-weight:700;border:none;cursor:pointer;transition:transform .2s,box-shadow .2s}
 .btn:hover{transform:translateY(-1px);box-shadow:0 0 40px rgba(27,152,224,.5)}
 .btn-hero{padding:16px 36px;font-size:16px;box-shadow:0 0 32px rgba(27,152,224,.35)}
 .btn-cta{padding:18px 44px;font-size:17px;box-shadow:0 0 32px rgba(27,152,224,.35)}
@@ -384,7 +416,7 @@ footer{background:#080C14;border-top:1px solid var(--border);padding:48px 24px}
   <div class="narrow">
     <p class="eyebrow">The Problem</p>
     <h2>${esc(c.problemHeading)}</h2>
-    <p>${esc(c.problemBody)}</p>
+    ${(c.problemParagraphs || [c.problemBody]).map(p => `<p>${esc(p)}</p>`).join("\n    ")}
   </div>
 </section>
 
@@ -393,6 +425,14 @@ footer{background:#080C14;border-top:1px solid var(--border);padding:48px 24px}
     <p class="eyebrow">The Fix</p>
     <h2>${esc(c.solutionHeading)}</h2>
     ${solutionHTML}
+  </div>
+</section>
+
+<section>
+  <div class="narrow">
+    <p class="eyebrow">Local Market</p>
+    <h2><span class="grad">${esc(city)}</span> Context</h2>
+    <p>${esc(c.cityContext)}</p>
   </div>
 </section>
 
@@ -422,6 +462,14 @@ footer{background:#080C14;border-top:1px solid var(--border);padding:48px 24px}
         </tbody>
       </table>
     </div>
+  </div>
+</section>
+
+<section>
+  <div class="narrow">
+    <p class="eyebrow">Why Field-Built</p>
+    <h2>${esc(c.whyFBSHeading)}</h2>
+    ${(c.whyFBSBody || "").split(/\n\n+/).map(p => `<p>${esc(p)}</p>`).join("\n    ")}
   </div>
 </section>
 
