@@ -2,7 +2,7 @@
 
 /**
  * Field-Built Systems — Programmatic SEO Page Generator
- * Reads targets.csv → calls Claude API → writes HTML to /docs
+ * Reads targets.csv → calls Claude API (copy JSON only) → Node assembles HTML → writes to /docs
  *
  * Usage:
  *   node batch.js                    → process all rows
@@ -32,11 +32,11 @@ const CONFIG = {
   outputDir:  path.join(__dirname, "docs"),
   logFile:    path.join(__dirname, "batch.log"),
   errorFile:  path.join(__dirname, "batch-errors.log"),
-  cname:      "local.field-built.com",   // GitHub Pages custom domain — written on every run
-  model:      "claude-haiku-4-5-20251001",
-  maxTokens:  8000,
+  cname:      "local.field-built.com",
+  model:      "claude-haiku-4-5-20251001",  // LOCKED — never change
+  maxTokens:  2000,
   rate: {
-    delayBetweenMs: 100,    // Tier 2: 2,000 req/min — generation time is the real bottleneck
+    delayBetweenMs: 100,  // LOCKED — never change
     retryDelayMs:   15000,
     maxRetries:     3,
   },
@@ -44,13 +44,13 @@ const CONFIG = {
 
 // ─── Arg parsing ───────────────────────────────────────────────────────────
 
-const args         = process.argv.slice(2);
-const flag         = (f) => { const i = args.indexOf(f); return i !== -1 ? args[i + 1] : null; };
-const hasFlag      = (f) => args.includes(f);
-const LIMIT        = flag("--limit")  ? parseInt(flag("--limit"))  : null;
-const TARGET_SLUG  = flag("--slug")   ?? null;
-const CHUNK_INDEX  = flag("--chunk")  ? parseInt(flag("--chunk"))  : null;  // 1-based
-const CHUNK_TOTAL  = flag("--of")     ? parseInt(flag("--of"))     : null;
+const args          = process.argv.slice(2);
+const flag          = (f) => { const i = args.indexOf(f); return i !== -1 ? args[i + 1] : null; };
+const hasFlag       = (f) => args.includes(f);
+const LIMIT         = flag("--limit")  ? parseInt(flag("--limit"))  : null;
+const TARGET_SLUG   = flag("--slug")   ?? null;
+const CHUNK_INDEX   = flag("--chunk")  ? parseInt(flag("--chunk"))  : null;
+const CHUNK_TOTAL   = flag("--of")     ? parseInt(flag("--of"))     : null;
 const SKIP_EXISTING = hasFlag("--skip-existing");
 
 // ─── Logging ───────────────────────────────────────────────────────────────
@@ -67,23 +67,22 @@ function logError(slug, err) {
   fs.appendFileSync(CONFIG.errorFile, line + "\n");
 }
 
-// ─── Prompt builder ────────────────────────────────────────────────────────
+// ─── Row derivation (deterministic — never sent to model) ──────────────────
 
-function buildPrompt(row) {
+function deriveRow(row) {
   const { vertical, city, state, page_type, angle, slug } = row;
 
-  // Derive the keyword-targeted H1 from page_type + angle
   const angleLabel = {
-    "general":              `${vertical} companies`,
-    "small-business":       `small ${vertical} companies`,
-    "owner-operator":       `${vertical} owner-operators`,
-    "scaling-up":           `${vertical} companies scaling up`,
+    "general":                `${vertical} companies`,
+    "small-business":         `small ${vertical} companies`,
+    "owner-operator":         `${vertical} owner-operators`,
+    "scaling-up":             `${vertical} companies scaling up`,
     "switching-servicetitan": `${vertical} companies switching from ServiceTitan`,
-    "switching-jobber":     `${vertical} companies switching from Jobber`,
-    "new-business":         `new ${vertical} companies`,
+    "switching-jobber":       `${vertical} companies switching from Jobber`,
+    "new-business":           `new ${vertical} companies`,
   }[angle] ?? `${vertical} companies`;
 
-  const pageLabel = {
+  const h1 = {
     "crm":          `Best CRM for ${angleLabel} in ${city}, ${state}`,
     "automation":   `Automation Software for ${angleLabel} in ${city}, ${state}`,
     "ai-chat":      `AI Chat Agent for ${angleLabel} in ${city}, ${state}`,
@@ -91,358 +90,448 @@ function buildPrompt(row) {
     "reviews":      `Google Review Automation for ${angleLabel} in ${city}, ${state}`,
   }[page_type] ?? `Automation System for ${angleLabel} in ${city}, ${state}`;
 
-  const h1 = pageLabel;
-
-  // For competitor-angle pages, swap the middle column header
   const midColHeader =
     angle === "switching-servicetitan" ? "ServiceTitan" :
-    angle === "switching-jobber"       ? "Jobber"       :
-    "Generic CRM";
+    angle === "switching-jobber"       ? "Jobber"       : "Generic CRM";
 
-  return `You are writing a single, complete, production-ready HTML page for Field-Built Systems — a done-for-you automation agency serving field service businesses.
+  const ctaH2 = `Ready to See What This Looks Like for Your ${vertical} Business?`;
 
-TARGET KEYWORD / H1: "${h1}"
-VERTICAL: ${vertical}
-CITY: ${city}
-STATE: ${state}
-PAGE TYPE: ${page_type}
-ANGLE: ${angle}
-SLUG: ${slug}
+  const serviceDesc = {
+    "crm":          `CRM system configured for ${vertical} businesses`,
+    "automation":   `Done-for-you automation for ${vertical} companies`,
+    "ai-chat":      `AI chat agent for ${vertical} businesses`,
+    "lead-followup":`Automated lead follow-up for ${vertical} companies`,
+    "reviews":      `Google review automation for ${vertical} businesses`,
+  }[page_type] ?? `Automation system for ${vertical} businesses`;
 
-═══════════════════════════════════════════════════
-WRITING STYLE — ENFORCE EVERY RULE, NO EXCEPTIONS
-═══════════════════════════════════════════════════
-- Practitioner voice: sounds like someone who has actually run a field service business
-- Specific and opinionated — real local pain, real neighborhoods, real seasonal patterns
-- Contractions throughout. "You" and "your" always.
-- Varied sentence rhythm: short punchy lines mixed with longer explanatory ones
-- NEVER use: "in today's competitive landscape", "game-changer", "seamless", "leverage", "unlock your potential", "supercharge", "streamline", "busy owner", "hard-working", "tight-knit community"
-- NEVER open a paragraph with "You're running", "As a ${vertical} owner", "The ${city} market is", or any sentence that reads like a mail-merge
-- NEVER invent statistics or percentages — use directional language: "most", "significantly more", "faster than"
-- NEVER reference existing clients or imply past results
-- City context must earn its place: a specific seasonal pressure, a named neighborhood dynamic, a real market condition — not the city name inserted into a generic sentence
-
-═══════════════════════════════════════════════════
-PAGE STRUCTURE — FOLLOW EXACTLY, IN ORDER
-═══════════════════════════════════════════════════
-
-1. HERO
-   - H1: exactly "${h1}"
-   - One-line subhead: specific pain + what FBS delivers, no fluff
-   - Single CTA button: "Book a Free 30-Minute Call" → https://field-built.com/book
-   - Small badge above H1: "Done-for-you · Live in 10–14 days"
-
-2. INTRO PARAGRAPH
-   - 2–3 short paragraphs max
-   - DO NOT open with "You're running X trucks" — that's a template. Start mid-thought, like
-     you're already in the conversation. Lead with what's actually happening in their business
-     or their market right now.
-   - The revenue/truck range (1–15 trucks, $300K–$5M) must be woven in naturally, not stated
-     as a qualification checklist
-   - "Why this city" must be a real observation — a seasonal pattern, a neighborhood dynamic,
-     a competitive pressure specific to ${city} — not just the city name dropped into a sentence
-   - BANNED openers: "You're running", "If you're a", "As a ${vertical} owner", "Running a
-     ${vertical} business in ${city}", "The ${city} ${vertical} market"
-
-3. PROBLEM SECTION (one paragraph MAX)
-   - One paragraph. Hard stop.
-   - Name the operational failure, not the category. Not "missed leads" — describe what actually
-     happens: the phone rings at 7pm, nobody answers, they text the next guy in Google Maps.
-   - Real local texture: a specific season, a specific part of ${city}, a specific customer behavior
-   - End on consequence, not setup. No transition sentence into the solution.
-   - BANNED: any sentence that begins "Without a system", "Most ${vertical} owners", "The problem is"
-
-4. SOLUTION SECTION
-   - What Field-Built delivers
-   - Done-for-you framing throughout — not "you'll configure" but "we install"
-   - Built on GoHighLevel + AI stack
-   - Live in 10–14 days
-
-5. FOUR FEATURE CARDS (2×2 grid desktop, 1-col mobile)
-   Card titles must be specific capabilities, not generic labels. Examples:
-   - "AI Chat Agent — Answers While You're on the Roof"
-   - "Automated Review Requests After Every Job"
-   - "Lead Follow-Up That Runs Without You"
-   - "Your Pipeline, Built and Configured for You"
-
-6. COMPARISON TABLE
-   Columns: Field-Built Systems | ${midColHeader} | DIY
-   Exactly these 6 rows, in this order:
-   Row 1: Done-for-you setup       | ✓ | ✗ | ✗
-   Row 2: AI chat + voice agent    | ✓ | ✗ | ✗
-   Row 3: Automated review requests| ✓ | ✗ | ✗
-   Row 4: Lead follow-up sequences | ✓ | Manual | ✗
-   Row 5: Launch timeline          | 10–14 days | Months | Never
-   Row 6: Monthly cost             | $500/mo all-in | $300–800+ DIY config | Your time
-   ✓ = #22D87A  |  ✗ = #EF4444  |  Manual = #F59E0B  |  FBS values = #00D4FF
-
-7. FAQ (4–5 questions)
-   - Real objections from ${vertical} owners — not generic software questions
-   - Direct answers, no restating the question, no fluff
-   - Example objections: "Do I have to learn new software?", "What if I'm already using GoHighLevel?",
-     "How is this different from just buying a CRM?", "What happens after setup — are you done?",
-     "How fast will I actually see results?"
-   - Each FAQ question: wrap in <h3>
-
-8. CTA SECTION
-   - H2: "Ready to See What This Looks Like for Your ${vertical} Business?"
-   - Low-commitment framing: "30 minutes. No pitch deck. No pressure."
-   - Button: "Book a Free 30-Minute Call" → https://field-built.com/book
-   - One line of reassurance beneath: "Most clients are live within 10–14 days."
-
-═══════════════════════════════════════════════════
-DESIGN SYSTEM — MATCH THE HOMEPAGE EXACTLY
-═══════════════════════════════════════════════════
-
-COLORS (use CSS custom properties):
-  --bg:        #080C14    /* page background */
-  --bg-card:   #0E1420    /* card / section alt background */
-  --bg-alt:    #0A0F1A    /* subtle alternating section tint */
-  --border:    rgba(255,255,255,0.07)
-  --text:      #F1F5F9    /* primary text */
-  --text-muted:#8B9AB4    /* secondary / caption text */
-  --cyan:      #1B98E0    /* gradient start / accent */
-  --violet:    #8B5CF6    /* gradient end */
-  --green:     #22D87A    /* ✓ checkmarks */
-  --red:       #EF4444    /* ✗ marks */
-  --amber:     #F59E0B    /* Manual label */
-  --fbs-val:   #00D4FF    /* FBS table values */
-
-GRADIENT (use on H2 accent words, CTA button, and hero badge):
-  background: linear-gradient(90deg, #1B98E0, #8B5CF6);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-
-TYPOGRAPHY:
-  - Font: Inter from Google Fonts (weights 400, 500, 600, 700, 800, 900)
-  - H1: font-size clamp(36px, 5vw, 64px); font-weight: 900; color: #F1F5F9; line-height: 1.1
-  - H2: font-size clamp(28px, 4vw, 48px); font-weight: 800; color: #F1F5F9
-       2–4 words per H2 should use the gradient span class
-  - Body: font-size 18px; color: var(--text); line-height: 1.75
-  - Muted: color: var(--text-muted); font-size: 17px
-
-NAV (fixed, matches homepage exactly):
-  <header> fixed top-0, z-index 100, border-bottom: 1px solid var(--border),
-  background: rgba(8,12,20,0.9), backdrop-filter: blur(20px), height: 64px.
-
-  LEFT: Logo img + "Field-Built Systems" wordmark
-    Logo: <img src="https://assets.cdn.filesafe.space/8rt3tZ6TYwlA5NWwwHXp/media/69efea020d66f2a665bccba8.png"
-               alt="Field-Built Systems" style="height:40px;width:auto;object-fit:contain">
-    Wordmark: font-size 22px; font-weight 700; color #F1F5F9; margin-left 12px
-
-  CENTER LINKS (hidden on mobile): Home | Services | About | Demo
-    href values: https://field-built.com | /services | /about | /demo
-    Active (Home): color #1B98E0
-    Inactive: color #8B9AB4; hover: color #1B98E0; transition 0.2s
-
-  RIGHT: "Book a Free Call" button
-    gradient background (--cyan → --violet), border-radius 999px,
-    padding 10px 22px, font-size 14px, font-weight 600, color #fff,
-    no border, cursor pointer
-
-  MOBILE HAMBURGER: visible below 768px; clicking toggles a full-width dropdown menu
-  with all nav links + CTA stacked vertically on --bg-card background.
-  Implement with a <script> block — no frameworks.
-
-HERO SECTION — use this exact HTML structure, no deviations:
-  <section class="hero">
-    <div class="hero-orb hero-orb--1"></div>
-    <div class="hero-orb hero-orb--2"></div>
-    <div class="hero-inner">
-      <div class="hero-badge">Done-for-you · Live in 10–14 days</div>
-      <h1>[TARGET KEYWORD VERBATIM]</h1>
-      <p class="hero-sub">[ONE-LINE SUBHEAD]</p>
-      <a href="https://field-built.com/book" class="btn-primary">Book a Free 30-Minute Call</a>
-    </div>
-  </section>
-
-  Required CSS for hero:
-  .hero {
-    position: relative; overflow: hidden;
-    min-height: 100vh; display: flex; align-items: center; justify-content: center;
-    text-align: center; padding: 120px 24px 80px;
-    background: radial-gradient(ellipse 80% 60% at 50% 40%, rgba(27,152,224,0.12) 0%, var(--bg) 70%);
-    background-color: var(--bg);
-  }
-  .hero::before {
-    content: ""; position: absolute; inset: 0; pointer-events: none;
-    background-image: linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
-                      linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
-    background-size: 40px 40px;
-  }
-  .hero-orb { position: absolute; border-radius: 50%; filter: blur(80px); pointer-events: none; }
-  .hero-orb--1 { width: 400px; height: 400px; background: rgba(27,152,224,0.15); top: -80px; left: -80px; }
-  .hero-orb--2 { width: 300px; height: 300px; background: rgba(139,92,246,0.12); bottom: -60px; right: -60px; }
-  .hero-inner {
-    position: relative; z-index: 1;
-    max-width: 860px; margin: 0 auto;
-    display: flex; flex-direction: column; align-items: center; gap: 24px;
-  }
-  .hero-badge {
-    display: inline-block; padding: 6px 18px; border-radius: 999px;
-    border: 1px solid rgba(27,152,224,0.4); background: rgba(27,152,224,0.1);
-    font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
-    background: linear-gradient(90deg, #1B98E0, #8B5CF6);
-    -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
-  }
-  .hero h1 {
-    font-size: clamp(36px, 5vw, 64px); font-weight: 900; color: #F1F5F9;
-    line-height: 1.1; letter-spacing: -1px; margin: 0;
-  }
-  .hero-sub {
-    color: var(--text-muted); font-size: 18px; line-height: 1.6;
-    max-width: 520px; margin: 0;
-  }
-  .btn-primary {
-    display: inline-block; padding: 16px 36px; border-radius: 999px;
-    background: linear-gradient(135deg, #1B98E0, #8B5CF6);
-    color: #fff; font-size: 16px; font-weight: 700; text-decoration: none;
-    box-shadow: 0 0 32px rgba(27,152,224,0.35); transition: box-shadow 0.2s, transform 0.2s;
-  }
-  .btn-primary:hover { box-shadow: 0 0 48px rgba(27,152,224,0.55); transform: translateY(-2px); }
-
-SECTIONS:
-  - padding: 80px 24px (desktop); 60px 20px (mobile)
-  - max-width container: 1100px, margin auto
-  - Section labels (eyebrow text): font-size 11px, uppercase, letter-spacing 0.1em, color var(--cyan)
-  - Alternate section backgrounds: --bg → --bg-alt → --bg → --bg-card etc.
-
-INTRO SECTION (the first section after the hero) — give it visual presence:
-  - background: var(--bg-alt)
-  - border-top: 1px solid var(--border)
-  - max-width for text content: 720px, centered
-  - The eyebrow label ("WHO THIS IS FOR") must sit above a visible divider:
-      display: block; margin-bottom: 20px; padding-bottom: 20px;
-      border-bottom: 1px solid var(--border)
-  - Body paragraphs: font-size 19px; line-height 1.8; color var(--text)
-  - First paragraph: first letter or first 3–4 words in color var(--cyan), font-weight 700
-    — makes the section feel like it has an entry point, not a flat wall of text
-
-CARDS (feature cards):
-  - background: var(--bg-card); border: 1px solid var(--border); border-radius: 16px; padding: 28px
-  - On hover: border-color rgba(27,152,224,0.3); box-shadow: 0 0 20px rgba(27,152,224,0.08)
-  - Icon tile: 48px square, border-radius 12px, gradient background, icon in white
-  - Card title: H3, font-size 18px, font-weight 700, color var(--text)
-  - Card body: font-size 16px, color var(--text-muted), line-height 1.65
-
-COMPARISON TABLE:
-  - border-collapse: separate; border-spacing: 0; width: 100%; border-radius: 12px; overflow hidden
-  - Header row: background linear-gradient(135deg, rgba(27,152,224,0.15), rgba(139,92,246,0.1))
-  - FBS column header: color var(--fbs-val); font-weight 800
-  - Odd rows: background rgba(255,255,255,0.02); even: transparent
-  - Cell padding: 16px 20px; border-bottom: 1px solid var(--border)
-  - ✓ spans: color var(--green); font-weight 700
-  - ✗ spans: color var(--red); font-weight 700
-  - Manual spans: color var(--amber); font-weight 600
-  - FBS value cells: color var(--fbs-val); font-weight 600
-  - Wrap table in horizontally scrollable div on mobile
-
-FAQ:
-  - Accordion-style, pure CSS or minimal JS
-  - Each item: border-bottom 1px solid var(--border); padding 20px 0
-  - Question (H3): font-size 17px; font-weight 600; color var(--text); cursor pointer
-  - Answer: font-size 17px; color var(--text-muted); line-height 1.7; padding-top 12px
-
-CTA SECTION:
-  - Background: radial-gradient from rgba(27,152,224,0.08) center over --bg
-  - H2: white with gradient accent words
-  - Subhead: var(--text-muted)
-  - Button: gradient bg, rounded-full, padding 18px 44px, font-size 17px weight 700, glow shadow
-
-FOOTER (matches homepage):
-  - background: #080C14; border-top: 1px solid var(--border); padding: 48px 24px
-  - 4-column grid (desktop): col-span-2 brand block + Company nav + Legal nav
-  - Brand block: logo img + "Field-Built Systems" wordmark, tagline, phone + email links
-      Logo: same src as nav, height 32px
-      Phone: (817) 518-7791 → tel:8175187791
-      Email: info@field-built.com
-  - Company links: Services → /services; About → /about; Contact → /contact
-  - Legal links: Privacy Policy → /privacy; Terms of Service → /terms; Service Agreement → /service-agreement
-  - Bottom bar: "© 2026 Field-Built Systems. All rights reserved." centered, font-size 13px, color var(--text-muted)
-  - All footer links: color var(--text-muted); hover: color var(--cyan)
-  - On mobile: stack to 1 column
-
-═══════════════════════════════════════════════════
-META / TECHNICAL REQUIREMENTS
-═══════════════════════════════════════════════════
-- Complete standalone HTML file: <!DOCTYPE html> through </html>
-- <head> includes:
-    - charset UTF-8, viewport meta
-    - <title>${h1} | Field-Built Systems</title>
-    - <meta name="description"> — 140–160 chars, keyword-rich, action-oriented
-    - <link rel="canonical" href="https://seo.field-built.com/${slug}">
-    - og:title, og:description, og:url, og:type="website"
-    - Google Fonts: Inter 400,500,600,700,800,900
-    - All CSS in one <style> block — no external stylesheets
-    - Three JSON-LD <script> blocks (see schema below)
-- No external JS libraries
-- Mobile responsive with inline media queries
-- Hamburger nav JS in a <script> block at bottom of <body>
-- H TAG STRATEGY:
-    - ONE H1 per page — the exact target keyword
-    - H2s: keyword-rich descriptive headings. Include city + vertical naturally in at least 2 H2s.
-      Examples: "Why ${vertical} Owners in ${city} Are Switching Systems" not "The Solution"
-    - H3s: inside feature cards and FAQ items
-    - FAQ questions: each in an <h3>
-
-SCHEMA MARKUP — include all three in <head>:
-
-1. LocalBusiness:
-{
-  "@context": "https://schema.org",
-  "@type": "LocalBusiness",
-  "name": "Field-Built Systems",
-  "url": "https://field-built.com",
-  "telephone": "(817) 518-7791",
-  "email": "info@field-built.com",
-  "description": "Done-for-you automation systems for ${vertical} companies in ${city}, ${state}",
-  "priceRange": "$$",
-  "areaServed": {
-    "@type": "City",
-    "name": "${city}",
-    "containedInPlace": { "@type": "State", "name": "${state}" }
-  },
-  "serviceType": "${page_type}"
+  return { ...row, h1, midColHeader, ctaH2, serviceDesc, angleLabel };
 }
 
-2. Service:
-{
-  "@context": "https://schema.org",
-  "@type": "Service",
-  "name": "${h1}",
-  "provider": { "@type": "Organization", "name": "Field-Built Systems", "url": "https://field-built.com" },
-  "areaServed": "${city}, ${state}",
-  "description": "Done-for-you automation and CRM system for ${vertical} businesses in ${city}. Built on GoHighLevel with AI chat, lead follow-up, and review automation. Live in 10–14 days.",
-  "url": "https://seo.field-built.com/${slug}"
-}
+// ─── Prompt builder (copy only — no HTML, no CSS) ──────────────────────────
 
-3. FAQPage (generate from your 4–5 FAQ items):
+function buildContentPrompt(derived) {
+  const { vertical, city, state, page_type, h1 } = derived;
+
+  const faqBank = {
+    "crm":          ["Do I have to learn new software?", "What if I'm already using GoHighLevel?", "How is this different from just buying a CRM?", "What happens after setup?", "How fast will I see results?"],
+    "automation":   ["What exactly gets automated?", "Do I need technical skills to run this?", "What if my team resists new tools?", "How is this different from buying software myself?", "What happens if something breaks?"],
+    "ai-chat":      ["Will the AI actually sound like my business?", "What happens when the AI can't answer?", "Does this replace my receptionist?", "What hours does the AI chat work?", "How long does setup take?"],
+    "lead-followup":["How many follow-ups does it send?", "Can I customize what it says?", "What if a lead asks to stop?", "Does this work with my current CRM?", "What's the typical response rate?"],
+    "reviews":      ["Will this get me fake reviews?", "What if a customer is unhappy?", "Which platforms does this work on?", "How does the timing work?", "What if I already have a review process?"],
+  }[page_type] ?? ["Do I have to learn new software?", "How fast will I see results?", "What if something breaks?", "Is there a contract?"];
+
+  return `You write conversion copy for Field-Built Systems, a done-for-you automation agency for field service businesses.
+
+VERTICAL: ${vertical} | CITY: ${city}, ${state} | PAGE: ${page_type}
+H1: "${h1}"
+
+RULES:
+- Practitioner voice — sounds like someone who ran a ${vertical} business
+- Contractions, "you/your" throughout, varied sentence rhythm
+- City context must be specific: real neighborhoods, real seasonal patterns, real market pressure
+- Never open with "You're running", "As a ${vertical} owner", or "The ${city} market is"
+- Never invent stats — use "most", "significantly more", "faster than"
+- Never reference existing clients or imply past results
+- Forbidden: "game-changer", "seamless", "leverage", "supercharge", "streamline", "hard-working", "tight-knit"
+- Problem paragraph: one paragraph, name the specific operational failure (not the category), end on consequence
+
+Return ONLY valid JSON, no markdown:
 {
-  "@context": "https://schema.org",
-  "@type": "FAQPage",
-  "mainEntity": [
-    { "@type": "Question", "name": "QUESTION TEXT", "acceptedAnswer": { "@type": "Answer", "text": "ANSWER TEXT" } }
-    // ... one object per FAQ item
+  "heroSubhead": "one sharp line, specific pain + what FBS delivers",
+  "introP1": "paragraph — lead with what's happening in their business right now, weave in 1-15 trucks / $300K-$5M naturally",
+  "introP2": "paragraph — why ${city} specifically, a real seasonal or neighborhood observation",
+  "problemBody": "one paragraph max — the specific operational failure, local texture, consequence",
+  "solutionH2": "keyword-rich H2 including ${vertical} and ${city}",
+  "solutionBody": "2-3 sentences — done-for-you framing, GoHighLevel + AI, live in 10-14 days. May include <a href='/services'>our services</a> or <a href='/demo'>see a demo</a>.",
+  "cards": [
+    { "icon": "emoji", "title": "specific capability title", "body": "2-3 sentences" },
+    { "icon": "emoji", "title": "specific capability title", "body": "2-3 sentences" },
+    { "icon": "emoji", "title": "specific capability title", "body": "2-3 sentences" },
+    { "icon": "emoji", "title": "specific capability title", "body": "2-3 sentences" }
+  ],
+  "faqH2": "keyword-rich H2 for FAQ section",
+  "faqs": [
+    { "q": "${faqBank[0]}", "a": "direct answer, no restatement" },
+    { "q": "${faqBank[1]}", "a": "direct answer" },
+    { "q": "${faqBank[2]}", "a": "direct answer" },
+    { "q": "${faqBank[3]}", "a": "direct answer" }
   ]
+}`;
 }
 
-═══════════════════════════════════════════════════
-OUTPUT RULES
-═══════════════════════════════════════════════════
-- Output ONLY the raw HTML — no markdown fences, no explanation, no preamble
-- Start with <!DOCTYPE html> and end with </html>
-- The file must be self-contained and render correctly in a browser with no external resources except Google Fonts
-`;
+// ─── Sanitization ──────────────────────────────────────────────────────────
+
+function escHtml(s = "") {
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+// solutionBody only — preserves <a href="/services"> and <a href="/demo"> internal links
+function sanitizeBody(s = "") {
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/<(?!\/?(a)\b)[^>]+>/gi, "")
+    .replace(/(<a\s+href=")(?!\/|https:\/\/field-built\.com)/gi, "$1/");
+}
+
+// ─── Static locked blocks (never sent to model) ────────────────────────────
+
+const NAV_HTML = `
+<header class="nav">
+  <div class="nav-inner">
+    <a href="https://field-built.com" class="nav-brand">
+      <img src="https://assets.cdn.filesafe.space/8rt3tZ6TYwlA5NWwwHXp/media/69efea020d66f2a665bccba8.png" alt="Field-Built Systems" height="40">
+      <span>Field-Built Systems</span>
+    </a>
+    <nav class="nav-links" aria-label="Main navigation">
+      <a href="https://field-built.com">Home</a>
+      <a href="/services">Services</a>
+      <a href="/about">About</a>
+      <a href="/demo">Demo</a>
+    </nav>
+    <a href="https://field-built.com/book" class="nav-cta">Book a Free Call</a>
+    <button class="nav-hamburger" aria-label="Toggle menu" aria-expanded="false">
+      <span></span><span></span><span></span>
+    </button>
+  </div>
+  <div class="nav-mobile" id="navMobile">
+    <a href="https://field-built.com">Home</a>
+    <a href="/services">Services</a>
+    <a href="/about">About</a>
+    <a href="/demo">Demo</a>
+    <a href="https://field-built.com/book" class="nav-cta-mobile">Book a Free Call</a>
+  </div>
+</header>`;
+
+const FOOTER_HTML = `
+<footer class="footer">
+  <div class="footer-inner">
+    <div class="footer-brand">
+      <a href="https://field-built.com" class="nav-brand">
+        <img src="https://assets.cdn.filesafe.space/8rt3tZ6TYwlA5NWwwHXp/media/69efea020d66f2a665bccba8.png" alt="Field-Built Systems" height="32" loading="lazy">
+        <span>Field-Built Systems</span>
+      </a>
+      <p class="footer-tagline">Done-for-you automation for field service businesses.</p>
+      <div class="footer-contact">
+        <a href="tel:8175187791">(817) 518-7791</a>
+        <a href="mailto:info@field-built.com">info@field-built.com</a>
+      </div>
+    </div>
+    <div class="footer-col">
+      <p class="footer-col-label">Company</p>
+      <a href="/services">Services</a>
+      <a href="/about">About</a>
+      <a href="/contact">Contact</a>
+    </div>
+    <div class="footer-col">
+      <p class="footer-col-label">Legal</p>
+      <a href="/privacy">Privacy Policy</a>
+      <a href="/terms">Terms of Service</a>
+      <a href="/service-agreement">Service Agreement</a>
+    </div>
+  </div>
+  <div class="footer-bottom">© 2026 Field-Built Systems. All rights reserved.</div>
+</footer>`;
+
+const NAV_JS = `
+<script>
+  const btn = document.querySelector('.nav-hamburger');
+  const mob = document.getElementById('navMobile');
+  btn.addEventListener('click', () => {
+    const open = mob.classList.toggle('open');
+    btn.setAttribute('aria-expanded', open);
+  });
+</script>`;
+
+// ─── HTML assembler (all HTML/CSS — never in the prompt) ───────────────────
+
+function assembleHTML(derived, content) {
+  const { vertical, city, state, slug, h1, midColHeader, ctaH2, serviceDesc } = derived;
+  const {
+    heroSubhead = "", introP1 = "", introP2 = "", problemBody = "",
+    solutionH2 = "", solutionBody = "",
+    cards = [], faqH2 = "", faqs = [],
+  } = content;
+
+  const esc = escHtml;
+
+  const metaDesc = `Done-for-you ${derived.page_type} for ${vertical} companies in ${city}, ${state}. AI chat, automated follow-up, and Google review automation. Live in 10–14 days.`.slice(0, 160);
+
+  const schemaLocal = JSON.stringify({
+    "@context": "https://schema.org",
+    "@type": "LocalBusiness",
+    "@id": `https://local.field-built.com/${slug}`,
+    "name": "Field-Built Systems",
+    "url": "https://field-built.com",
+    "telephone": "(817) 518-7791",
+    "email": "info@field-built.com",
+    "description": `Done-for-you automation systems for ${vertical} companies in ${city}, ${state}`,
+    "priceRange": "$$",
+    "areaServed": { "@type": "City", "name": city, "containedInPlace": { "@type": "State", "name": state } },
+    "serviceType": serviceDesc,
+  });
+
+  const schemaService = JSON.stringify({
+    "@context": "https://schema.org",
+    "@type": "Service",
+    "name": h1,
+    "provider": { "@type": "Organization", "name": "Field-Built Systems", "url": "https://field-built.com" },
+    "areaServed": `${city}, ${state}`,
+    "description": `Done-for-you ${serviceDesc} in ${city}. Built on GoHighLevel with AI chat, lead follow-up, and review automation. Live in 10–14 days.`,
+    "url": `https://local.field-built.com/${slug}`,
+  });
+
+  const schemaFaq = JSON.stringify({
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": faqs.map(f => ({
+      "@type": "Question",
+      "name": f.q,
+      "acceptedAnswer": { "@type": "Answer", "text": f.a },
+    })),
+  });
+
+  const cardHTML = cards.map(c => `
+    <div class="card">
+      <div class="card-icon">${esc(c.icon)}</div>
+      <h3>${esc(c.title)}</h3>
+      <p>${esc(c.body)}</p>
+    </div>`).join("");
+
+  const faqHTML = faqs.map(f => `
+    <details class="faq-item">
+      <summary><h3>${esc(f.q)}</h3></summary>
+      <div class="faq-answer"><p>${esc(f.a)}</p></div>
+    </details>`).join("");
+
+  const tableRows = [
+    ["Done-for-you setup",        `<span class="chk">✓</span>`, `<span class="x">✗</span>`,          `<span class="x">✗</span>`],
+    ["AI chat + voice agent",     `<span class="chk">✓</span>`, `<span class="x">✗</span>`,          `<span class="x">✗</span>`],
+    ["Automated review requests", `<span class="chk">✓</span>`, `<span class="x">✗</span>`,          `<span class="x">✗</span>`],
+    ["Lead follow-up sequences",  `<span class="chk">✓</span>`, `<span class="manual">Manual</span>`,`<span class="x">✗</span>`],
+    ["Launch timeline",           `<span class="fbs-val">10–14 days</span>`, "Months",                "Never"],
+    ["Monthly cost",              `<span class="fbs-val">$500/mo all-in</span>`, "$300–800+ DIY config", "Your time"],
+  ].map((r, i) => `
+    <tr class="${i % 2 === 0 ? "row-odd" : ""}">
+      <td class="row-label">${r[0]}</td>
+      <td class="fbs-col">${r[1]}</td>
+      <td>${r[2]}</td>
+      <td>${r[3]}</td>
+    </tr>`).join("");
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${esc(h1)} | Field-Built Systems</title>
+<meta name="description" content="${esc(metaDesc)}">
+<link rel="canonical" href="https://local.field-built.com/${slug}">
+<meta name="robots" content="index,follow">
+<meta property="og:title" content="${esc(h1)} | Field-Built Systems">
+<meta property="og:description" content="${esc(metaDesc)}">
+<meta property="og:url" content="https://local.field-built.com/${slug}">
+<meta property="og:type" content="website">
+<meta name="geo.region" content="US">
+<meta name="geo.placename" content="${esc(city)}, ${esc(state)}">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<script type="application/ld+json">${schemaLocal}</script>
+<script type="application/ld+json">${schemaService}</script>
+<script type="application/ld+json">${schemaFaq}</script>
+<style>
+:root{--bg:#080C14;--bg-card:#0E1420;--bg-alt:#0A0F1A;--border:rgba(255,255,255,0.07);--text:#F1F5F9;--muted:#8B9AB4;--cyan:#1B98E0;--violet:#8B5CF6;--green:#22D87A;--red:#EF4444;--amber:#F59E0B;--fbs:#00D4FF}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--text);font-size:18px;line-height:1.75;-webkit-font-smoothing:antialiased}
+a{color:inherit;text-decoration:none}
+img{display:block}
+.nav{position:fixed;top:0;left:0;right:0;z-index:100;background:rgba(8,12,20,0.92);backdrop-filter:blur(20px);border-bottom:1px solid var(--border);height:64px}
+.nav-inner{max-width:1140px;margin:0 auto;padding:0 24px;height:64px;display:flex;align-items:center;justify-content:space-between;gap:24px}
+.nav-brand{display:flex;align-items:center;gap:12px;font-size:22px;font-weight:700;color:var(--text)}
+.nav-links{display:flex;gap:28px}
+.nav-links a{font-size:15px;color:var(--muted);transition:color 0.2s}
+.nav-links a:hover,.nav-mobile a:hover{color:var(--cyan)}
+.nav-cta{background:linear-gradient(135deg,var(--cyan),var(--violet));border-radius:999px;padding:10px 22px;font-size:14px;font-weight:600;color:#fff;white-space:nowrap}
+.nav-hamburger{display:none;flex-direction:column;gap:5px;background:none;border:none;cursor:pointer;padding:4px}
+.nav-hamburger span{display:block;width:22px;height:2px;background:var(--text);border-radius:2px}
+.nav-mobile{display:none;flex-direction:column;padding:16px 24px 20px;gap:16px;background:var(--bg-card);border-top:1px solid var(--border)}
+.nav-mobile.open{display:flex}
+.nav-mobile a{font-size:16px;color:var(--muted)}
+.nav-cta-mobile{background:linear-gradient(135deg,var(--cyan),var(--violet));border-radius:999px;padding:12px 24px;font-weight:600;color:#fff;text-align:center;margin-top:4px}
+.hero{position:relative;overflow:hidden;min-height:100vh;display:flex;align-items:center;justify-content:center;text-align:center;padding:120px 24px 80px;background:radial-gradient(ellipse 80% 60% at 50% 40%,rgba(27,152,224,0.12) 0%,var(--bg) 70%)}
+.hero::before{content:"";position:absolute;inset:0;pointer-events:none;background-image:linear-gradient(rgba(255,255,255,0.03) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.03) 1px,transparent 1px);background-size:40px 40px}
+.hero-orb{position:absolute;border-radius:50%;filter:blur(80px);pointer-events:none}
+.hero-orb--1{width:400px;height:400px;background:rgba(27,152,224,0.15);top:-80px;left:-80px}
+.hero-orb--2{width:300px;height:300px;background:rgba(139,92,246,0.12);bottom:-60px;right:-60px}
+.hero-inner{position:relative;z-index:1;max-width:860px;margin:0 auto;display:flex;flex-direction:column;align-items:center;gap:24px}
+.hero-badge{display:inline-block;padding:6px 18px;border-radius:999px;border:1px solid rgba(27,152,224,0.4);font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;background:linear-gradient(90deg,#1B98E0,#8B5CF6);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.hero h1{font-size:clamp(36px,5vw,64px);font-weight:900;color:#F1F5F9;line-height:1.1;letter-spacing:-1px}
+.hero-sub{color:var(--muted);font-size:18px;line-height:1.6;max-width:520px}
+.btn-primary{display:inline-block;padding:16px 36px;border-radius:999px;background:linear-gradient(135deg,#1B98E0,#8B5CF6);color:#fff;font-size:16px;font-weight:700;box-shadow:0 0 32px rgba(27,152,224,0.35);transition:box-shadow 0.2s,transform 0.2s}
+.btn-primary:hover{box-shadow:0 0 48px rgba(27,152,224,0.55);transform:translateY(-2px)}
+.section{padding:80px 24px}
+.section--alt{background:var(--bg-alt)}
+.section--intro{background:var(--bg-alt);border-top:1px solid var(--border)}
+.container{max-width:1140px;margin:0 auto}
+.container--narrow{max-width:720px;margin:0 auto}
+.eyebrow{display:block;font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--cyan);margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--border)}
+h2.grad{font-size:clamp(28px,4vw,48px);font-weight:800;line-height:1.15;margin-bottom:20px;background:linear-gradient(90deg,#1B98E0,#8B5CF6);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.body-text{font-size:19px;line-height:1.8;color:var(--text);margin-bottom:20px}
+.body-text:last-child{margin-bottom:0}
+.body-text a{color:var(--cyan);text-decoration:underline}
+.cards-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:40px}
+.card{background:var(--bg-card);border:1px solid var(--border);border-radius:16px;padding:28px;transition:border-color 0.25s,box-shadow 0.25s}
+.card:hover{border-color:rgba(27,152,224,0.3);box-shadow:0 0 20px rgba(27,152,224,0.08)}
+.card-icon{width:48px;height:48px;border-radius:12px;background:linear-gradient(135deg,#1B98E0,#8B5CF6);display:flex;align-items:center;justify-content:center;font-size:22px;margin-bottom:16px}
+.card h3{font-size:18px;font-weight:700;color:var(--text);margin-bottom:10px}
+.card p{font-size:16px;color:var(--muted);line-height:1.65}
+.table-wrap{border-radius:12px;border:1px solid var(--border);overflow:hidden;overflow-x:auto}
+table{width:100%;border-collapse:collapse;min-width:520px}
+thead th{padding:16px 20px;font-size:14px;font-weight:700;text-align:left;background:linear-gradient(135deg,rgba(27,152,224,0.15),rgba(139,92,246,0.1));border-bottom:1px solid var(--border)}
+thead th.fbs-head{color:var(--fbs)}
+td{padding:14px 20px;font-size:15px;border-bottom:1px solid rgba(255,255,255,0.06);color:var(--muted);vertical-align:middle}
+.row-label{font-weight:500;color:var(--text)}
+.fbs-col{background:rgba(27,152,224,0.04)}
+.row-odd{background:rgba(255,255,255,0.015)}
+.chk{color:#22D87A;font-size:18px;font-weight:700}
+.x{color:#EF4444;font-size:18px}
+.manual{color:#F59E0B;font-size:14px;font-weight:500}
+.fbs-val{color:var(--fbs);font-weight:600}
+.faq-item{border-bottom:1px solid var(--border)}
+.faq-item summary{padding:20px 0;cursor:pointer;list-style:none;display:flex;justify-content:space-between;align-items:center;gap:16px}
+.faq-item summary h3{font-size:17px;font-weight:600;color:var(--text)}
+.faq-item summary::after{content:"+";font-size:20px;color:var(--muted);flex-shrink:0;transition:transform 0.2s}
+.faq-item[open] summary::after{content:"×";color:var(--cyan)}
+.faq-answer{padding:0 0 20px}
+.faq-answer p{font-size:17px;color:var(--muted);line-height:1.75}
+.section--cta{text-align:center;background:radial-gradient(ellipse 70% 50% at 50% 50%,rgba(27,152,224,0.08) 0%,var(--bg) 70%)}
+.section--cta h2{margin-bottom:16px}
+.section--cta .sub{color:var(--muted);font-size:18px;margin-bottom:36px}
+.reassurance{font-size:13px;color:var(--muted);margin-top:16px;opacity:0.7}
+.footer{background:#080C14;border-top:1px solid var(--border);padding:48px 24px 32px}
+.footer-inner{max-width:1140px;margin:0 auto;display:grid;grid-template-columns:2fr 1fr 1fr;gap:40px;margin-bottom:40px}
+.footer-tagline{color:var(--muted);font-size:14px;margin:12px 0}
+.footer-contact{display:flex;flex-direction:column;gap:6px}
+.footer-contact a{color:var(--muted);font-size:14px;transition:color 0.2s}
+.footer-contact a:hover{color:var(--cyan)}
+.footer-col-label{font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--text);margin-bottom:12px}
+.footer-col{display:flex;flex-direction:column;gap:10px}
+.footer-col a{color:var(--muted);font-size:14px;transition:color 0.2s}
+.footer-col a:hover{color:var(--cyan)}
+.footer-bottom{max-width:1140px;margin:0 auto;padding-top:24px;border-top:1px solid var(--border);text-align:center;font-size:13px;color:var(--muted)}
+@media(max-width:768px){
+  .nav-links,.nav-cta{display:none}
+  .nav-hamburger{display:flex}
+  .hero{padding:100px 20px 60px}
+  .section{padding:60px 20px}
+  .cards-grid{grid-template-columns:1fr}
+  .footer-inner{grid-template-columns:1fr;gap:28px}
+}
+</style>
+</head>
+<body>
+${NAV_HTML}
+<main>
+
+<section class="hero">
+  <div class="hero-orb hero-orb--1"></div>
+  <div class="hero-orb hero-orb--2"></div>
+  <div class="hero-inner">
+    <div class="hero-badge">Done-for-you · Live in 10–14 days</div>
+    <h1>${esc(h1)}</h1>
+    <p class="hero-sub">${esc(heroSubhead)}</p>
+    <a href="https://field-built.com/book" class="btn-primary">Book a Free 30-Minute Call</a>
+  </div>
+</section>
+
+<section class="section section--intro">
+  <div class="container--narrow">
+    <span class="eyebrow">Who This Is For</span>
+    <p class="body-text">${esc(introP1)}</p>
+    <p class="body-text">${esc(introP2)}</p>
+  </div>
+</section>
+
+<section class="section">
+  <div class="container--narrow">
+    <span class="eyebrow">The Problem</span>
+    <h2 class="grad">Why ${esc(vertical)} Owners in ${esc(city)} Stay Stuck</h2>
+    <p class="body-text">${esc(problemBody)}</p>
+  </div>
+</section>
+
+<section class="section section--alt">
+  <div class="container--narrow">
+    <span class="eyebrow">The Solution</span>
+    <h2 class="grad">${esc(solutionH2)}</h2>
+    <p class="body-text">${sanitizeBody(solutionBody)}</p>
+  </div>
+</section>
+
+<section class="section">
+  <div class="container">
+    <span class="eyebrow">What You Get</span>
+    <h2 class="grad">Everything Built, Configured, and Running</h2>
+    <div class="cards-grid">${cardHTML}</div>
+  </div>
+</section>
+
+<section class="section section--alt">
+  <div class="container">
+    <span class="eyebrow">How We Compare</span>
+    <h2 class="grad">Field-Built Systems vs ${esc(midColHeader)} vs DIY</h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th></th>
+            <th class="fbs-head">Field-Built Systems</th>
+            <th>${esc(midColHeader)}</th>
+            <th>DIY</th>
+          </tr>
+        </thead>
+        <tbody>${tableRows}</tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="container--narrow">
+    <span class="eyebrow">FAQ</span>
+    <h2 class="grad">${esc(faqH2)}</h2>
+    <div>${faqHTML}</div>
+  </div>
+</section>
+
+<section class="section section--cta">
+  <div class="container--narrow">
+    <h2 class="grad">${esc(ctaH2)}</h2>
+    <p class="sub">30 minutes. No pitch deck. No pressure.</p>
+    <a href="https://field-built.com/book" class="btn-primary">Book a Free 30-Minute Call</a>
+    <p class="reassurance">Most clients are live within 10–14 days.</p>
+  </div>
+</section>
+
+</main>
+${FOOTER_HTML}
+${NAV_JS}
+</body>
+</html>`;
 }
 
 // ─── API call with retry ────────────────────────────────────────────────────
 
-async function generatePage(client, row) {
-  const prompt = buildPrompt(row);
+async function fetchContent(client, derived) {
+  const prompt = buildContentPrompt(derived);
   let attempt = 0;
 
-  while (attempt < CONFIG.rate.maxRetries) {
+  while (true) {
     try {
       const response = await client.messages.create({
         model:      CONFIG.model,
@@ -451,23 +540,22 @@ async function generatePage(client, row) {
       });
 
       const raw = response.content
-        .filter((b) => b.type === "text")
-        .map((b) => b.text)
-        .join("");
-
-      // Strip accidental markdown fences
-      return raw
-        .replace(/^```html\s*/i, "")
+        .filter(b => b.type === "text")
+        .map(b => b.text)
+        .join("")
+        .replace(/^```json\s*/i, "")
         .replace(/^```\s*/i, "")
         .replace(/\s*```\s*$/i, "")
         .trim();
 
+      return JSON.parse(raw);
+
     } catch (err) {
       attempt++;
-      const isRetryable = err.status === 429 || err.status >= 500;
+      const isRetryable = err.status === 429 || err.status >= 500 || err instanceof SyntaxError;
       if (isRetryable && attempt < CONFIG.rate.maxRetries) {
-        log(`  ↻ Retry ${attempt}/${CONFIG.rate.maxRetries} for ${row.slug} (${err.status ?? err.message})`);
-        await sleep(CONFIG.rate.retryDelayMs * attempt); // exponential back-off
+        log(`  ↻ Retry ${attempt}/${CONFIG.rate.maxRetries} for ${derived.slug} (${err.status ?? err.message})`);
+        await sleep(CONFIG.rate.retryDelayMs * attempt);
       } else {
         throw err;
       }
@@ -477,7 +565,7 @@ async function generatePage(client, row) {
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
 function ensureDir(dir) {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
@@ -498,38 +586,28 @@ async function main() {
   }
 
   ensureDir(CONFIG.outputDir);
-
-  // Always write CNAME — GitHub Pages clears the custom domain if this file is missing on push
   fs.writeFileSync(path.join(CONFIG.outputDir, "CNAME"), CONFIG.cname, "utf8");
   log(`CNAME written: ${CONFIG.cname}`);
 
-  // Parse CSV
-  const raw     = fs.readFileSync(CONFIG.csvPath, "utf8");
-  let rows      = parse(raw, { columns: true, skip_empty_lines: true, trim: true });
-  const total   = rows.length;
+  const raw   = fs.readFileSync(CONFIG.csvPath, "utf8");
+  let rows    = parse(raw, { columns: true, skip_empty_lines: true, trim: true });
+  const total = rows.length;
 
-  // Filter to single slug if requested
   if (TARGET_SLUG) {
-    rows = rows.filter((r) => r.slug === TARGET_SLUG);
-    if (rows.length === 0) {
-      console.error(`No row found with slug: ${TARGET_SLUG}`);
-      process.exit(1);
-    }
+    rows = rows.filter(r => r.slug === TARGET_SLUG);
+    if (rows.length === 0) { console.error(`No row found with slug: ${TARGET_SLUG}`); process.exit(1); }
   }
 
-  // Chunk filtering (for parallel CI matrix)
   if (CHUNK_INDEX !== null && CHUNK_TOTAL !== null) {
     rows = rows.filter((_, i) => i % CHUNK_TOTAL === CHUNK_INDEX - 1);
     log(`Chunk ${CHUNK_INDEX}/${CHUNK_TOTAL}: ${rows.length} rows`);
   }
 
-  // Limit
   if (LIMIT) rows = rows.slice(0, LIMIT);
 
-  // Skip existing
   if (SKIP_EXISTING) {
     const before = rows.length;
-    rows = rows.filter((r) => !fs.existsSync(outputPath(r.slug)));
+    rows = rows.filter(r => !fs.existsSync(outputPath(r.slug)));
     log(`Skip-existing: ${before - rows.length} already done, ${rows.length} remaining`);
   }
 
@@ -539,41 +617,27 @@ async function main() {
   let failed  = 0;
 
   for (let i = 0; i < rows.length; i++) {
-    const row  = rows[i];
-    const slug = row.slug;
-    const out  = outputPath(slug);
+    const derived = deriveRow(rows[i]);
+    const out     = outputPath(derived.slug);
 
-    log(`[${i + 1}/${rows.length}] Generating: ${slug}`);
+    log(`[${i + 1}/${rows.length}] Generating: ${derived.slug}`);
 
     try {
-      const html = await generatePage(client, row);
-
-      if (!html.startsWith("<!DOCTYPE") && !html.startsWith("<html")) {
-        throw new Error("Output does not look like valid HTML — skipping write");
-      }
-
+      const content = await fetchContent(client, derived);
+      const html    = assembleHTML(derived, content);
       fs.writeFileSync(out, html, "utf8");
-      log(`  ✓ Written: ${out}`);
+      log(`  ✓ ${derived.slug}`);
       success++;
-
     } catch (err) {
-      logError(slug, err);
+      logError(derived.slug, err);
       failed++;
     }
 
-    if (i < rows.length - 1) {
-      await sleep(CONFIG.rate.delayBetweenMs);
-    }
+    if (i < rows.length - 1) await sleep(CONFIG.rate.delayBetweenMs);
   }
 
   log(`\nDone. ✓ ${success} succeeded  ✗ ${failed} failed`);
-  if (failed > 0) {
-    log(`Check batch-errors.log for details.`);
-    process.exit(1); // non-zero exit so CI catches failures
-  }
+  if (failed > 0) { log(`Check batch-errors.log for details.`); process.exit(1); }
 }
 
-main().catch((err) => {
-  console.error("Fatal:", err);
-  process.exit(1);
-});
+main().catch(err => { console.error("Fatal:", err); process.exit(1); });
