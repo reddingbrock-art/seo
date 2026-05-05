@@ -1,45 +1,46 @@
 #!/usr/bin/env node
 
 /**
- * Field-Built Systems — Programmatic SEO Page Generator
- * Reads targets.csv → calls Claude API (copy JSON only) → Node assembles HTML → writes to /docs
- *
- * Usage:
- *   node batch.js                    → process all rows
- *   node batch.js --limit 10         → process first N rows
- *   node batch.js --slug some-slug   → regenerate one specific page
- *   node batch.js --chunk 2 --of 5   → process chunk 2 of 5 (for parallel CI)
- *   node batch.js --skip-existing    → skip slugs that already have an HTML file
- *
- * Setup:
- *   npm install @anthropic-ai/sdk csv-parse dotenv
- *   ANTHROPIC_API_KEY in .env or environment
- */
 
-import Anthropic from "@anthropic-ai/sdk";
-import { parse } from "csv-parse/sync";
-import fs from "fs";
-import path from "path";
-import { fileURLToPath } from "url";
-import "dotenv/config";
+- Field-Built Systems — Programmatic SEO Page Generator
+- Reads targets.csv → calls Claude API (copy JSON only) → Node assembles HTML → writes to /docs
+- 
+- Usage:
+- node batch.js                    → process all rows
+- node batch.js –limit 10         → process first N rows
+- node batch.js –slug some-slug   → regenerate one specific page
+- node batch.js –chunk 2 –of 5   → process chunk 2 of 5 (for parallel CI)
+- node batch.js –skip-existing    → skip slugs that already have an HTML file
+- 
+- Setup:
+- npm install @anthropic-ai/sdk csv-parse dotenv
+- ANTHROPIC_API_KEY in .env or environment
+  */
+
+import Anthropic from “@anthropic-ai/sdk”;
+import { parse } from “csv-parse/sync”;
+import fs from “fs”;
+import path from “path”;
+import { fileURLToPath } from “url”;
+import “dotenv/config”;
 
 // ─── Config ────────────────────────────────────────────────────────────────
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const CONFIG = {
-  csvPath:    path.join(__dirname, "targets.csv"),
-  outputDir:  path.join(__dirname, "docs"),
-  logFile:    path.join(__dirname, "batch.log"),
-  errorFile:  path.join(__dirname, "batch-errors.log"),
-  cname:      "local.field-built.com",
-  model:      "claude-haiku-4-5-20251001",  // LOCKED — never change
-  maxTokens:  2000,
-  rate: {
-    delayBetweenMs: 100,  // LOCKED — never change
-    retryDelayMs:   15000,
-    maxRetries:     3,
-  },
+csvPath:    path.join(__dirname, “targets.csv”),
+outputDir:  path.join(__dirname, “docs”),
+logFile:    path.join(__dirname, “batch.log”),
+errorFile:  path.join(__dirname, “batch-errors.log”),
+cname:      “local.field-built.com”,
+model:      “claude-haiku-4-5-20251001”,  // LOCKED — never change
+maxTokens:  2000,
+rate: {
+delayBetweenMs: 100,  // LOCKED — never change
+retryDelayMs:   15000,
+maxRetries:     3,
+},
 };
 
 // ─── Arg parsing ───────────────────────────────────────────────────────────
@@ -47,139 +48,141 @@ const CONFIG = {
 const args          = process.argv.slice(2);
 const flag          = (f) => { const i = args.indexOf(f); return i !== -1 ? args[i + 1] : null; };
 const hasFlag       = (f) => args.includes(f);
-const LIMIT         = flag("--limit")  ? parseInt(flag("--limit"))  : null;
-const TARGET_SLUG   = flag("--slug")   ?? null;
-const CHUNK_INDEX   = flag("--chunk")  ? parseInt(flag("--chunk"))  : null;
-const CHUNK_TOTAL   = flag("--of")     ? parseInt(flag("--of"))     : null;
-const SKIP_EXISTING = hasFlag("--skip-existing");
+const LIMIT         = flag(”–limit”)  ? parseInt(flag(”–limit”))  : null;
+const TARGET_SLUG   = flag(”–slug”)   ?? null;
+const CHUNK_INDEX   = flag(”–chunk”)  ? parseInt(flag(”–chunk”))  : null;
+const CHUNK_TOTAL   = flag(”–of”)     ? parseInt(flag(”–of”))     : null;
+const SKIP_EXISTING = hasFlag(”–skip-existing”);
 
 // ─── Logging ───────────────────────────────────────────────────────────────
 
 function log(msg) {
-  const line = `[${new Date().toISOString()}] ${msg}`;
-  console.log(line);
-  fs.appendFileSync(CONFIG.logFile, line + "\n");
+const line = `[${new Date().toISOString()}] ${msg}`;
+console.log(line);
+fs.appendFileSync(CONFIG.logFile, line + “\n”);
 }
 
 function logError(slug, err) {
-  const line = `[${new Date().toISOString()}] ERROR ${slug}: ${err.message ?? err}`;
-  console.error(line);
-  fs.appendFileSync(CONFIG.errorFile, line + "\n");
+const line = `[${new Date().toISOString()}] ERROR ${slug}: ${err.message ?? err}`;
+console.error(line);
+fs.appendFileSync(CONFIG.errorFile, line + “\n”);
 }
 
 // ─── Row derivation (deterministic — never sent to model) ──────────────────
 
 function deriveRow(row) {
-  const { vertical, city, state, page_type, angle, slug } = row;
+const { vertical, city, state, page_type, angle, slug } = row;
 
-  const angleLabel = {
-    "general":                `${vertical} companies`,
-    "small-business":         `small ${vertical} companies`,
-    "owner-operator":         `${vertical} owner-operators`,
-    "scaling-up":             `${vertical} companies scaling up`,
-    "switching-servicetitan": `${vertical} companies switching from ServiceTitan`,
-    "switching-jobber":       `${vertical} companies switching from Jobber`,
-    "new-business":           `new ${vertical} companies`,
-  }[angle] ?? `${vertical} companies`;
+const angleLabel = {
+“general”:                `${vertical} companies`,
+“small-business”:         `small ${vertical} companies`,
+“owner-operator”:         `${vertical} owner-operators`,
+“scaling-up”:             `${vertical} companies scaling up`,
+“switching-servicetitan”: `${vertical} companies switching from ServiceTitan`,
+“switching-jobber”:       `${vertical} companies switching from Jobber`,
+“new-business”:           `new ${vertical} companies`,
+}[angle] ?? `${vertical} companies`;
 
-  const h1 = {
-    "crm":          `Best CRM for ${angleLabel} in ${city}, ${state}`,
-    "automation":   `Automation Software for ${angleLabel} in ${city}, ${state}`,
-    "ai-chat":      `AI Chat Agent for ${angleLabel} in ${city}, ${state}`,
-    "lead-followup":`Lead Follow-Up System for ${angleLabel} in ${city}, ${state}`,
-    "reviews":      `Google Review Automation for ${angleLabel} in ${city}, ${state}`,
-  }[page_type] ?? `Automation System for ${angleLabel} in ${city}, ${state}`;
+const h1 = {
+“crm”:          `Best CRM for ${angleLabel} in ${city}, ${state}`,
+“automation”:   `Automation Software for ${angleLabel} in ${city}, ${state}`,
+“ai-chat”:      `AI Chat Agent for ${angleLabel} in ${city}, ${state}`,
+“lead-followup”:`Lead Follow-Up System for ${angleLabel} in ${city}, ${state}`,
+“reviews”:      `Google Review Automation for ${angleLabel} in ${city}, ${state}`,
+}[page_type] ?? `Automation System for ${angleLabel} in ${city}, ${state}`;
 
-  const midColHeader =
-    angle === "switching-servicetitan" ? "ServiceTitan" :
-    angle === "switching-jobber"       ? "Jobber"       : "Generic CRM";
+const midColHeader =
+angle === “switching-servicetitan” ? “ServiceTitan” :
+angle === “switching-jobber”       ? “Jobber”       : “Generic CRM”;
 
-  const ctaH2 = `Ready to See What This Looks Like for Your ${vertical} Business?`;
+const ctaH2 = `Ready to See What This Looks Like for Your ${vertical} Business?`;
 
-  const serviceDesc = {
-    "crm":          `CRM system configured for ${vertical} businesses`,
-    "automation":   `Done-for-you automation for ${vertical} companies`,
-    "ai-chat":      `AI chat agent for ${vertical} businesses`,
-    "lead-followup":`Automated lead follow-up for ${vertical} companies`,
-    "reviews":      `Google review automation for ${vertical} businesses`,
-  }[page_type] ?? `Automation system for ${vertical} businesses`;
+const serviceDesc = {
+“crm”:          `CRM system configured for ${vertical} businesses`,
+“automation”:   `Done-for-you automation for ${vertical} companies`,
+“ai-chat”:      `AI chat agent for ${vertical} businesses`,
+“lead-followup”:`Automated lead follow-up for ${vertical} companies`,
+“reviews”:      `Google review automation for ${vertical} businesses`,
+}[page_type] ?? `Automation system for ${vertical} businesses`;
 
-  return { ...row, h1, midColHeader, ctaH2, serviceDesc, angleLabel };
+return { …row, h1, midColHeader, ctaH2, serviceDesc, angleLabel };
 }
 
 // ─── Prompt builder (copy only — no HTML, no CSS) ──────────────────────────
 
 function buildContentPrompt(derived) {
-  const { vertical, city, state, page_type, h1 } = derived;
+const { vertical, city, state, page_type, h1 } = derived;
 
-  const faqBank = {
-    "crm":          ["Do I have to learn new software?", "What if I'm already using GoHighLevel?", "How is this different from just buying a CRM?", "What happens after setup?", "How fast will I see results?"],
-    "automation":   ["What exactly gets automated?", "Do I need technical skills to run this?", "What if my team resists new tools?", "How is this different from buying software myself?", "What happens if something breaks?"],
-    "ai-chat":      ["Will the AI actually sound like my business?", "What happens when the AI can't answer?", "Does this replace my receptionist?", "What hours does the AI chat work?", "How long does setup take?"],
-    "lead-followup":["How many follow-ups does it send?", "Can I customize what it says?", "What if a lead asks to stop?", "Does this work with my current CRM?", "What's the typical response rate?"],
-    "reviews":      ["Will this get me fake reviews?", "What if a customer is unhappy?", "Which platforms does this work on?", "How does the timing work?", "What if I already have a review process?"],
-  }[page_type] ?? ["Do I have to learn new software?", "How fast will I see results?", "What if something breaks?", "Is there a contract?"];
+const faqBank = {
+“crm”:          [“Do I have to learn new software?”, “What if I’m already using GoHighLevel?”, “How is this different from just buying a CRM?”, “What happens after setup?”, “How fast will I see results?”],
+“automation”:   [“What exactly gets automated?”, “Do I need technical skills to run this?”, “What if my team resists new tools?”, “How is this different from buying software myself?”, “What happens if something breaks?”],
+“ai-chat”:      [“Will the AI actually sound like my business?”, “What happens when the AI can’t answer?”, “Does this replace my receptionist?”, “What hours does the AI chat work?”, “How long does setup take?”],
+“lead-followup”:[“How many follow-ups does it send?”, “Can I customize what it says?”, “What if a lead asks to stop?”, “Does this work with my current CRM?”, “What’s the typical response rate?”],
+“reviews”:      [“Will this get me fake reviews?”, “What if a customer is unhappy?”, “Which platforms does this work on?”, “How does the timing work?”, “What if I already have a review process?”],
+}[page_type] ?? [“Do I have to learn new software?”, “How fast will I see results?”, “What if something breaks?”, “Is there a contract?”];
 
-  return `You write conversion copy for Field-Built Systems, a done-for-you automation agency for field service businesses.
+return `You write conversion copy for Field-Built Systems, a done-for-you automation agency for field service businesses.
 
 VERTICAL: ${vertical} | CITY: ${city}, ${state} | PAGE: ${page_type}
-H1: "${h1}"
+H1: “${h1}”
 
 RULES:
+
 - Practitioner voice — sounds like someone who ran a ${vertical} business
-- Contractions, "you/your" throughout, varied sentence rhythm
+- Contractions, “you/your” throughout, varied sentence rhythm
 - City context must be specific: real neighborhoods, real seasonal patterns, real market pressure
-- Never open with "You're running", "As a ${vertical} owner", or "The ${city} market is"
-- Never invent stats — use "most", "significantly more", "faster than"
+- Never open with “You’re running”, “As a ${vertical} owner”, or “The ${city} market is”
+- Never invent stats — use “most”, “significantly more”, “faster than”
 - Never reference existing clients or imply past results
-- Forbidden: "game-changer", "seamless", "leverage", "supercharge", "streamline", "hard-working", "tight-knit"
+- Forbidden: “game-changer”, “seamless”, “leverage”, “supercharge”, “streamline”, “hard-working”, “tight-knit”
 - Problem paragraph: one paragraph, name the specific operational failure (not the category), end on consequence
 
 Return ONLY valid JSON, no markdown:
 {
-  "heroSubhead": "one sharp line, specific pain + what FBS delivers",
-  "introP1": "paragraph — lead with what's happening in their business right now, weave in 1-15 trucks / $300K-$5M naturally",
-  "introP2": "paragraph — why ${city} specifically, a real seasonal or neighborhood observation",
-  "problemBody": "one paragraph max — the specific operational failure, local texture, consequence",
-  "solutionH2": "keyword-rich H2 including ${vertical} and ${city}",
-  "solutionBody": "2-3 sentences — done-for-you framing, GoHighLevel + AI, live in 10-14 days. May include <a href='/services'>our services</a> or <a href='/demo'>see a demo</a>.",
-  "cards": [
-    { "icon": "emoji", "title": "specific capability title", "body": "2-3 sentences" },
-    { "icon": "emoji", "title": "specific capability title", "body": "2-3 sentences" },
-    { "icon": "emoji", "title": "specific capability title", "body": "2-3 sentences" },
-    { "icon": "emoji", "title": "specific capability title", "body": "2-3 sentences" }
-  ],
-  "faqH2": "keyword-rich H2 for FAQ section",
-  "faqs": [
-    { "q": "${faqBank[0]}", "a": "direct answer, no restatement" },
-    { "q": "${faqBank[1]}", "a": "direct answer" },
-    { "q": "${faqBank[2]}", "a": "direct answer" },
-    { "q": "${faqBank[3]}", "a": "direct answer" }
-  ]
+“heroSubhead”: “one sharp line, specific pain + what FBS delivers”,
+“introP1”: “paragraph — lead with what’s happening in their business right now, weave in 1-15 trucks / $300K-$5M naturally”,
+“introP2”: “paragraph — why ${city} specifically, a real seasonal or neighborhood observation”,
+“problemBody”: “one paragraph max — the specific operational failure, local texture, consequence”,
+“solutionH2”: “keyword-rich H2 including ${vertical} and ${city}”,
+“solutionBody”: “2-3 sentences — done-for-you framing, GoHighLevel + AI, live in 10-14 days. May include <a href='/services'>our services</a> or <a href='/demo'>see a demo</a>.”,
+“cards”: [
+{ “icon”: “emoji”, “title”: “specific capability title”, “body”: “2-3 sentences” },
+{ “icon”: “emoji”, “title”: “specific capability title”, “body”: “2-3 sentences” },
+{ “icon”: “emoji”, “title”: “specific capability title”, “body”: “2-3 sentences” },
+{ “icon”: “emoji”, “title”: “specific capability title”, “body”: “2-3 sentences” }
+],
+“faqH2”: “keyword-rich H2 for FAQ section”,
+“faqs”: [
+{ “q”: “${faqBank[0]}”, “a”: “direct answer, no restatement” },
+{ “q”: “${faqBank[1]}”, “a”: “direct answer” },
+{ “q”: “${faqBank[2]}”, “a”: “direct answer” },
+{ “q”: “${faqBank[3]}”, “a”: “direct answer” }
+]
 }`;
 }
 
 // ─── Sanitization ──────────────────────────────────────────────────────────
 
-function escHtml(s = "") {
-  return String(s)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+function escHtml(s = “”) {
+return String(s)
+.replace(/&/g, “&”)
+.replace(/</g, “<”)
+.replace(/>/g, “>”)
+.replace(/”/g, “"”);
 }
 
 // solutionBody only — preserves <a href="/services"> and <a href="/demo"> internal links
-function sanitizeBody(s = "") {
-  return String(s)
-    .replace(/&/g, "&amp;")
-    .replace(/<(?!\/?(a)\b)[^>]+>/gi, "")
-    .replace(/(<a\s+href=")(?!\/|https:\/\/field-built\.com)/gi, "$1/");
+function sanitizeBody(s = “”) {
+return String(s)
+.replace(/&/g, “&”)
+.replace(/<(?!/?(a)\b)[^>]+>/gi, “”)
+.replace(/(<a\s+href=”)(?!/|https://field-built.com)/gi, “$1/”);
 }
 
 // ─── Static locked blocks (never sent to model) ────────────────────────────
 
 const NAV_HTML = `
+
 <header class="nav">
   <div class="nav-inner">
     <a href="https://field-built.com" class="nav-brand">
@@ -207,6 +210,7 @@ const NAV_HTML = `
 </header>`;
 
 const FOOTER_HTML = `
+
 <footer class="footer">
   <div class="footer-inner">
     <div class="footer-brand">
@@ -237,6 +241,7 @@ const FOOTER_HTML = `
 </footer>`;
 
 const NAV_JS = `
+
 <script>
   const btn = document.querySelector('.nav-hamburger');
   const mob = document.getElementById('navMobile');
@@ -249,80 +254,66 @@ const NAV_JS = `
 // ─── HTML assembler (all HTML/CSS — never in the prompt) ───────────────────
 
 function assembleHTML(derived, content) {
-  const { vertical, city, state, slug, h1, midColHeader, ctaH2, serviceDesc } = derived;
-  const {
-    heroSubhead = "", introP1 = "", introP2 = "", problemBody = "",
-    solutionH2 = "", solutionBody = "",
-    cards = [], faqH2 = "", faqs = [],
-  } = content;
+const { vertical, city, state, slug, h1, midColHeader, ctaH2, serviceDesc } = derived;
+const {
+heroSubhead = “”, introP1 = “”, introP2 = “”, problemBody = “”,
+solutionH2 = “”, solutionBody = “”,
+cards = [], faqH2 = “”, faqs = [],
+} = content;
 
-  const esc = escHtml;
+const esc = escHtml;
 
-  const metaDesc = `Done-for-you ${derived.page_type} for ${vertical} companies in ${city}, ${state}. AI chat, automated follow-up, and Google review automation. Live in 10–14 days.`.slice(0, 160);
+const metaDesc = `Done-for-you ${derived.page_type} for ${vertical} companies in ${city}, ${state}. AI chat, automated follow-up, and Google review automation. Live in 10–14 days.`.slice(0, 160);
 
-  const schemaLocal = JSON.stringify({
-    "@context": "https://schema.org",
-    "@type": "LocalBusiness",
-    "@id": `https://local.field-built.com/${slug}`,
-    "name": "Field-Built Systems",
-    "url": "https://field-built.com",
-    "telephone": "(817) 518-7791",
-    "email": "info@field-built.com",
-    "description": `Done-for-you automation systems for ${vertical} companies in ${city}, ${state}`,
-    "priceRange": "$$",
-    "areaServed": { "@type": "City", "name": city, "containedInPlace": { "@type": "State", "name": state } },
-    "serviceType": serviceDesc,
-  });
+const schemaLocal = JSON.stringify({
+“@context”: “https://schema.org”,
+“@type”: “LocalBusiness”,
+“@id”: `https://local.field-built.com/${slug}`,
+“name”: “Field-Built Systems”,
+“url”: “https://field-built.com”,
+“telephone”: “(817) 518-7791”,
+“email”: “info@field-built.com”,
+“description”: `Done-for-you automation systems for ${vertical} companies in ${city}, ${state}`,
+“priceRange”: “$$”,
+“areaServed”: { “@type”: “City”, “name”: city, “containedInPlace”: { “@type”: “State”, “name”: state } },
+“serviceType”: serviceDesc,
+});
 
-  const schemaService = JSON.stringify({
-    "@context": "https://schema.org",
-    "@type": "Service",
-    "name": h1,
-    "provider": { "@type": "Organization", "name": "Field-Built Systems", "url": "https://field-built.com" },
-    "areaServed": `${city}, ${state}`,
-    "description": `Done-for-you ${serviceDesc} in ${city}. Built on GoHighLevel with AI chat, lead follow-up, and review automation. Live in 10–14 days.`,
-    "url": `https://local.field-built.com/${slug}`,
-  });
+const schemaService = JSON.stringify({
+“@context”: “https://schema.org”,
+“@type”: “Service”,
+“name”: h1,
+“provider”: { “@type”: “Organization”, “name”: “Field-Built Systems”, “url”: “https://field-built.com” },
+“areaServed”: `${city}, ${state}`,
+“description”: `Done-for-you ${serviceDesc} in ${city}. Built on GoHighLevel with AI chat, lead follow-up, and review automation. Live in 10–14 days.`,
+“url”: `https://local.field-built.com/${slug}`,
+});
 
-  const schemaFaq = JSON.stringify({
-    "@context": "https://schema.org",
-    "@type": "FAQPage",
-    "mainEntity": faqs.map(f => ({
-      "@type": "Question",
-      "name": f.q,
-      "acceptedAnswer": { "@type": "Answer", "text": f.a },
-    })),
-  });
+const schemaFaq = JSON.stringify({
+“@context”: “https://schema.org”,
+“@type”: “FAQPage”,
+“mainEntity”: faqs.map(f => ({
+“@type”: “Question”,
+“name”: f.q,
+“acceptedAnswer”: { “@type”: “Answer”, “text”: f.a },
+})),
+});
 
-  const cardHTML = cards.map(c => `
-    <div class="card">
-      <div class="card-icon">${esc(c.icon)}</div>
-      <h3>${esc(c.title)}</h3>
-      <p>${esc(c.body)}</p>
-    </div>`).join("");
+const cardHTML = cards.map(c => ` <div class="card"> <div class="card-icon">${esc(c.icon)}</div> <h3>${esc(c.title)}</h3> <p>${esc(c.body)}</p> </div>`).join(””);
 
-  const faqHTML = faqs.map(f => `
-    <details class="faq-item">
-      <summary><h3>${esc(f.q)}</h3></summary>
-      <div class="faq-answer"><p>${esc(f.a)}</p></div>
-    </details>`).join("");
+const faqHTML = faqs.map(f => ` <details class="faq-item"> <summary><h3>${esc(f.q)}</h3></summary> <div class="faq-answer"><p>${esc(f.a)}</p></div> </details>`).join(””);
 
-  const tableRows = [
-    ["Done-for-you setup",        `<span class="chk">✓</span>`, `<span class="x">✗</span>`,          `<span class="x">✗</span>`],
-    ["AI chat + voice agent",     `<span class="chk">✓</span>`, `<span class="x">✗</span>`,          `<span class="x">✗</span>`],
-    ["Automated review requests", `<span class="chk">✓</span>`, `<span class="x">✗</span>`,          `<span class="x">✗</span>`],
-    ["Lead follow-up sequences",  `<span class="chk">✓</span>`, `<span class="manual">Manual</span>`,`<span class="x">✗</span>`],
-    ["Launch timeline",           `<span class="fbs-val">10–14 days</span>`, "Months",                "Never"],
-    ["Monthly cost",              `<span class="fbs-val">$500/mo all-in</span>`, "$300–800+ DIY config", "Your time"],
-  ].map((r, i) => `
-    <tr class="${i % 2 === 0 ? "row-odd" : ""}">
-      <td class="row-label">${r[0]}</td>
-      <td class="fbs-col">${r[1]}</td>
-      <td>${r[2]}</td>
-      <td>${r[3]}</td>
-    </tr>`).join("");
+const tableRows = [
+[“Done-for-you setup”,        `<span class="chk">✓</span>`, `<span class="x">✗</span>`,          `<span class="x">✗</span>`],
+[“AI chat + voice agent”,     `<span class="chk">✓</span>`, `<span class="x">✗</span>`,          `<span class="x">✗</span>`],
+[“Automated review requests”, `<span class="chk">✓</span>`, `<span class="x">✗</span>`,          `<span class="x">✗</span>`],
+[“Lead follow-up sequences”,  `<span class="chk">✓</span>`, `<span class="manual">Manual</span>`,`<span class="x">✗</span>`],
+[“Launch timeline”,           `<span class="fbs-val">10–14 days</span>`, “Months”,                “Never”],
+[“Monthly cost”,              `<span class="fbs-val">$500/mo all-in</span>`, “$300–800+ DIY config”, “Your time”],
+].map((r, i) => ` <tr class="${i % 2 === 0 ? "row-odd" : ""}"> <td class="row-label">${r[0]}</td> <td class="fbs-col">${r[1]}</td> <td>${r[2]}</td> <td>${r[3]}</td> </tr>`).join(””);
 
-  return `<!DOCTYPE html>
+return `<!DOCTYPE html>
+
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -528,39 +519,42 @@ ${NAV_JS}
 // ─── API call with retry ────────────────────────────────────────────────────
 
 async function fetchContent(client, derived) {
-  const prompt = buildContentPrompt(derived);
-  let attempt = 0;
+const prompt = buildContentPrompt(derived);
+let attempt = 0;
 
-  while (true) {
-    try {
-      const response = await client.messages.create({
-        model:      CONFIG.model,
-        max_tokens: CONFIG.maxTokens,
-        messages:   [{ role: "user", content: prompt }],
-      });
+while (true) {
+try {
+const response = await client.messages.create({
+model:      CONFIG.model,
+max_tokens: CONFIG.maxTokens,
+messages:   [{ role: “user”, content: prompt }],
+});
 
-      const raw = response.content
-        .filter(b => b.type === "text")
-        .map(b => b.text)
-        .join("")
-        .replace(/^```json\s*/i, "")
-        .replace(/^```\s*/i, "")
-        .replace(/\s*```\s*$/i, "")
-        .trim();
+```
+  const raw = response.content
+    .filter(b => b.type === "text")
+    .map(b => b.text)
+    .join("")
+    .replace(/^```json\s*/i, "")
+    .replace(/^```\s*/i, "")
+    .replace(/\s*```\s*$/i, "")
+    .trim();
 
-      return JSON.parse(raw);
+  return JSON.parse(raw);
 
-    } catch (err) {
-      attempt++;
-      const isRetryable = err.status === 429 || err.status >= 500 || err instanceof SyntaxError;
-      if (isRetryable && attempt < CONFIG.rate.maxRetries) {
-        log(`  ↻ Retry ${attempt}/${CONFIG.rate.maxRetries} for ${derived.slug} (${err.status ?? err.message})`);
-        await sleep(CONFIG.rate.retryDelayMs * attempt);
-      } else {
-        throw err;
-      }
-    }
+} catch (err) {
+  attempt++;
+  const isRetryable = err.status === 429 || err.status >= 500 || err instanceof SyntaxError;
+  if (isRetryable && attempt < CONFIG.rate.maxRetries) {
+    log(`  ↻ Retry ${attempt}/${CONFIG.rate.maxRetries} for ${derived.slug} (${err.status ?? err.message})`);
+    await sleep(CONFIG.rate.retryDelayMs * attempt);
+  } else {
+    throw err;
   }
+}
+```
+
+}
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
@@ -568,76 +562,84 @@ async function fetchContent(client, derived) {
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
 function ensureDir(dir) {
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+// Guard: if a plain file named `docs` was accidentally committed, remove it first
+if (fs.existsSync(dir) && !fs.statSync(dir).isDirectory()) {
+fs.unlinkSync(dir);
+log(`Removed stale file at ${dir} — replacing with directory`);
+}
+if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 }
 
 function outputPath(slug) {
-  return path.join(CONFIG.outputDir, `${slug}.html`);
+return path.join(CONFIG.outputDir, `${slug}.html`);
 }
 
 // ─── Main ──────────────────────────────────────────────────────────────────
 
 async function main() {
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-  if (!fs.existsSync(CONFIG.csvPath)) {
-    console.error(`targets.csv not found at ${CONFIG.csvPath}`);
-    process.exit(1);
-  }
-
-  ensureDir(CONFIG.outputDir);
-  fs.writeFileSync(path.join(CONFIG.outputDir, "CNAME"), CONFIG.cname, "utf8");
-  log(`CNAME written: ${CONFIG.cname}`);
-
-  const raw   = fs.readFileSync(CONFIG.csvPath, "utf8");
-  let rows    = parse(raw, { columns: true, skip_empty_lines: true, trim: true });
-  const total = rows.length;
-
-  if (TARGET_SLUG) {
-    rows = rows.filter(r => r.slug === TARGET_SLUG);
-    if (rows.length === 0) { console.error(`No row found with slug: ${TARGET_SLUG}`); process.exit(1); }
-  }
-
-  if (CHUNK_INDEX !== null && CHUNK_TOTAL !== null) {
-    rows = rows.filter((_, i) => i % CHUNK_TOTAL === CHUNK_INDEX - 1);
-    log(`Chunk ${CHUNK_INDEX}/${CHUNK_TOTAL}: ${rows.length} rows`);
-  }
-
-  if (LIMIT) rows = rows.slice(0, LIMIT);
-
-  if (SKIP_EXISTING) {
-    const before = rows.length;
-    rows = rows.filter(r => !fs.existsSync(outputPath(r.slug)));
-    log(`Skip-existing: ${before - rows.length} already done, ${rows.length} remaining`);
-  }
-
-  log(`Starting batch: ${rows.length} pages (total in CSV: ${total})`);
-
-  let success = 0;
-  let failed  = 0;
-
-  for (let i = 0; i < rows.length; i++) {
-    const derived = deriveRow(rows[i]);
-    const out     = outputPath(derived.slug);
-
-    log(`[${i + 1}/${rows.length}] Generating: ${derived.slug}`);
-
-    try {
-      const content = await fetchContent(client, derived);
-      const html    = assembleHTML(derived, content);
-      fs.writeFileSync(out, html, "utf8");
-      log(`  ✓ ${derived.slug}`);
-      success++;
-    } catch (err) {
-      logError(derived.slug, err);
-      failed++;
-    }
-
-    if (i < rows.length - 1) await sleep(CONFIG.rate.delayBetweenMs);
-  }
-
-  log(`\nDone. ✓ ${success} succeeded  ✗ ${failed} failed`);
-  if (failed > 0) { log(`Check batch-errors.log for details.`); process.exit(1); }
+if (!fs.existsSync(CONFIG.csvPath)) {
+console.error(`targets.csv not found at ${CONFIG.csvPath}`);
+process.exit(1);
 }
 
-main().catch(err => { console.error("Fatal:", err); process.exit(1); });
+ensureDir(CONFIG.outputDir);
+fs.writeFileSync(path.join(CONFIG.outputDir, “CNAME”), CONFIG.cname, “utf8”);
+log(`CNAME written: ${CONFIG.cname}`);
+
+const raw   = fs.readFileSync(CONFIG.csvPath, “utf8”);
+let rows    = parse(raw, { columns: true, skip_empty_lines: true, trim: true });
+const total = rows.length;
+
+if (TARGET_SLUG) {
+rows = rows.filter(r => r.slug === TARGET_SLUG);
+if (rows.length === 0) { console.error(`No row found with slug: ${TARGET_SLUG}`); process.exit(1); }
+}
+
+if (CHUNK_INDEX !== null && CHUNK_TOTAL !== null) {
+rows = rows.filter((_, i) => i % CHUNK_TOTAL === CHUNK_INDEX - 1);
+log(`Chunk ${CHUNK_INDEX}/${CHUNK_TOTAL}: ${rows.length} rows`);
+}
+
+if (LIMIT) rows = rows.slice(0, LIMIT);
+
+if (SKIP_EXISTING) {
+const before = rows.length;
+rows = rows.filter(r => !fs.existsSync(outputPath(r.slug)));
+log(`Skip-existing: ${before - rows.length} already done, ${rows.length} remaining`);
+}
+
+log(`Starting batch: ${rows.length} pages (total in CSV: ${total})`);
+
+let success = 0;
+let failed  = 0;
+
+for (let i = 0; i < rows.length; i++) {
+const derived = deriveRow(rows[i]);
+const out     = outputPath(derived.slug);
+
+```
+log(`[${i + 1}/${rows.length}] Generating: ${derived.slug}`);
+
+try {
+  const content = await fetchContent(client, derived);
+  const html    = assembleHTML(derived, content);
+  fs.writeFileSync(out, html, "utf8");
+  log(`  ✓ ${derived.slug}`);
+  success++;
+} catch (err) {
+  logError(derived.slug, err);
+  failed++;
+}
+
+if (i < rows.length - 1) await sleep(CONFIG.rate.delayBetweenMs);
+```
+
+}
+
+log(`\nDone. ✓ ${success} succeeded  ✗ ${failed} failed`);
+if (failed > 0) { log(`Check batch-errors.log for details.`); process.exit(1); }
+}
+
+main().catch(err => { console.error(“Fatal:”, err); process.exit(1); });
