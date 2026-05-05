@@ -172,6 +172,7 @@ RULES:
 - problemParagraphs: pure pain only, zero solution language
 - Solution: done-for-you framing — "we install" not "you'll configure"
 - Reviews content: every customer gets asked, every review gets answered. AI drafts reply, owner approves. Never imply filtering.
+- NEVER use in any card title, heading, or copy: "positive review collection", "happy customer reviews", "automatic positive reviews", "collect good reviews", "filter reviews", "only positive", or any phrase implying only satisfied customers get the review request. Every customer gets asked, full stop.
 
 ${JSON.stringify(schema, null, 0)}`;
 }
