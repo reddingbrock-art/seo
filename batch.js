@@ -263,6 +263,7 @@ function assembleHTML(r, c) {
 <meta name="twitter:title" content="${esc(safeTitle)}">
 <meta name="twitter:description" content="${esc(c.metaDesc)}">
 <meta name="twitter:image" content="${LOGO}">
+<link rel="icon" type="image/png" href="https://assets.cdn.filesafe.space/8rt3tZ6TYwlA5NWwwHXp/media/69efea020d66f2a665bccba8.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
