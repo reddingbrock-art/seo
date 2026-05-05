@@ -460,7 +460,7 @@ footer{background:#080C14;border-top:1px solid var(--border);padding:48px 24px}
           <tr><td>Reputation management stack</td><td class="fv"><span class="chk">✓</span></td><td><span class="x">✗</span></td><td><span class="x">✗</span></td></tr>
           <tr><td>Lead follow-up sequences</td><td class="fv"><span class="chk">✓</span></td><td><span class="man">Manual</span></td><td><span class="x">✗</span></td></tr>
           <tr><td>Launch timeline</td><td class="fv">10–14 days</td><td>Months</td><td>Never</td></tr>
-          <tr><td>Monthly cost</td><td class="fv">$500/mo all-in</td><td>$300–800+ DIY config</td><td>Your time</td></tr>
+          <tr><td>Monthly cost</td><td class="fv">Simple flat rate</td><td>Varies + hidden fees</td><td>Your time</td></tr>
         </tbody>
       </table>
     </div>
