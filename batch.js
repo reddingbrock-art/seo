@@ -95,7 +95,42 @@ function deriveRow(row) {
     "reviews":       "Google review automation for " + vertical + " businesses",
   })[page_type] || ("Automation system for " + vertical + " businesses");
 
-  return Object.assign({}, row, { h1, midColHeader, ctaH2, serviceDesc, angleLabel });
+  const heroSubheadPool = {
+    "crm": [
+      "78% of customers go with whoever responds first. We make sure that's you.",
+      "50% of buyers choose the first vendor that responds. Your CRM should be working before you wake up.",
+      "Responding within 1 hour makes you 7x more likely to close. We build the system that makes that happen.",
+      "The average field service business loses 30% of inbound leads to slow follow-up. A real CRM fixes that.",
+    ],
+    "automation": [
+      "Responding within 1 hour makes you 7x more likely to close the job. Our system does it automatically.",
+      "78% of customers go with whoever responds first. Automation means that's always you.",
+      "40% of service bookings happen outside business hours. We make sure you're capturing every one of them.",
+      "The businesses pulling ahead right now aren't working harder. They've automated what used to fall through the cracks.",
+    ],
+    "ai-chat": [
+      "80% of callers sent to voicemail never leave a message. Our AI answers every time.",
+      "78% of customers go with whoever responds first. AI chat means you always pick up.",
+      "The odds of reaching a lead drop 100x after 5 minutes. AI chat closes that window permanently.",
+      "50% of buyers choose the first company that responds. Your competitors are still letting it ring.",
+    ],
+    "lead-followup": [
+      "The odds of reaching a lead drop 100x after 5 minutes. We follow up before they forget you.",
+      "80% of sales require 5 follow-ups. Most field service businesses stop after one.",
+      "78% of customers go with whoever responds first. A follow-up system makes sure you're always that company.",
+      "Responding within 1 hour makes you 7x more likely to qualify the lead. We automate every touchpoint after that.",
+    ],
+    "reviews": [
+      "53% of customers won't call a business rated below 4 stars. We help you stay above it.",
+      "88% of customers trust online reviews as much as a personal recommendation. Every job is a chance to earn one.",
+      "A one-star increase on Google drives up to 9% more revenue. We send the ask after every completed job.",
+      "Businesses with more reviews win more clicks. We build the system that gets them without you asking.",
+    ],
+  };
+  const subheadPool = heroSubheadPool[page_type] || heroSubheadPool["crm"];
+  const heroSubhead = subheadPool[Math.abs(slug.split("").reduce(function(a, c) { return a + c.charCodeAt(0); }, 0)) % subheadPool.length];
+
+  return Object.assign({}, row, { h1, midColHeader, ctaH2, serviceDesc, angleLabel, heroSubhead });
 }
 
 function buildContentPrompt(derived) {
@@ -113,20 +148,6 @@ function buildContentPrompt(derived) {
     "VERTICAL: " + vertical + " | CITY: " + city + ", " + state + " | PAGE: " + page_type + "\n" +
     "H1: \"" + h1 + "\"\n\n" +
     "RULES:\n" +
-    "- heroSubhead MUST contain one of these exact stats -- pick the most relevant to " + page_type + ":\n" +
-    "  * 78% of customers go with the first company that responds (Lead Response Management Study)\n" +
-    "  * Responding within 1 hour makes you 7x more likely to qualify the lead (HBR)\n" +
-    "  * The odds of reaching a lead drop 100x after 5 minutes (MIT/Kellogg)\n" +
-    "  * 50% of buyers choose the vendor that responds first (HubSpot)\n" +
-    "  * Businesses lose 75% of callers who reach voicemail and hang up (Invoca)\n" +
-    "  * 80% of callers sent to voicemail never leave a message (Ifbyphone)\n" +
-    "  * 40% of service bookings happen outside business hours (ServiceTitan)\n" +
-    "  * 88% of consumers trust online reviews as much as a personal recommendation (BrightLocal)\n" +
-    "  * 53% of customers won't use a business rated below 4 stars (BrightLocal)\n" +
-    "  * A one-star Yelp increase drives 5-9% more revenue (Harvard Business School)\n" +
-    "- heroSubhead must NEVER say: stop losing calls to voicemail, never miss a lead, or any voicemail cliche\n" +
-    "- heroSubhead must NEVER editorialize about the owner after the stat (no \"but most shops can't\", \"and you're probably not\", \"but you aren't\" constructions). Let the stat land, then connect it to what FBS delivers.\n" +
-    "- heroSubhead format: [stat as fact] + [what that means for their business or what FBS fixes]. Example: \"78% of customers go with whoever answers first. We make sure that's you.\"\n" +
     "- Practitioner voice -- sounds like someone who ran a " + vertical + " business, not a marketer\n" +
     "- Contractions and \"you/your\" throughout. Varied sentence rhythm -- short punchy sentences mixed with longer ones.\n" +
     "- City texture is mandatory in introP2 and problemBody: name real neighborhoods, real seasonal demand windows, real competitive conditions\n" +
@@ -320,7 +341,7 @@ function commitProgress(batchNum) {
 function assembleHTML(derived, content) {
   const { vertical, city, state, slug, h1, midColHeader, ctaH2, serviceDesc } = derived;
   const {
-    heroSubhead = "", introP1 = "", introP2 = "", introP3 = "", problemBody = "",
+    introP1 = "", introP2 = "", introP3 = "", problemBody = "",
     solutionH2 = "", solutionBody = "",
     cards = [], whatHappensNext = [], faqH2 = "", faqs = [],
   } = content;
@@ -395,7 +416,7 @@ function assembleHTML(derived, content) {
     NAV_HTML + '\n<main>\n' +
     '<section class="hero"><div class="hero-orb hero-orb--1"></div><div class="hero-orb hero-orb--2"></div>' +
     '<div class="hero-inner"><div class="hero-badge">Done-for-you &middot; Live in 10-14 days</div>' +
-    '<h1>' + esc(h1) + '</h1><p class="hero-sub">' + esc(heroSubhead) + '</p>' +
+    '<h1>' + esc(h1) + '</h1><p class="hero-sub">' + esc(derived.heroSubhead) + '</p>' +
     '<a href="https://field-built.com/book" class="btn-primary">Book a Free 30-Minute Call</a>' +
     '</div></section>\n' +
     '<section class="section section--intro"><div class="container--narrow">' +
