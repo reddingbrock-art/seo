@@ -113,27 +113,31 @@ function buildContentPrompt(derived) {
     "VERTICAL: " + vertical + " | CITY: " + city + ", " + state + " | PAGE: " + page_type + "\n" +
     "H1: \"" + h1 + "\"\n\n" +
     "RULES:\n" +
-    "- Practitioner voice -- sounds like someone who ran a " + vertical + " business\n" +
-    "- Contractions, \"you/your\" throughout, varied sentence rhythm\n" +
-    "- City context must be specific: real neighborhoods, real seasonal patterns, real market pressure\n" +
-    "- Never open with \"You're running\", \"As a " + vertical + " owner\", or \"The " + city + " market is\"\n" +
-    "- Never invent stats -- use \"most\", \"significantly more\", \"faster than\"\n" +
+    "- Practitioner voice -- sounds like someone who ran a " + vertical + " business, not a marketer\n" +
+    "- Contractions and \"you/your\" throughout. Varied sentence rhythm -- short punchy sentences mixed with longer ones.\n" +
+    "- City texture is mandatory in introP2 and problemBody: name real neighborhoods, real seasonal demand windows, real competitive conditions\n" +
+    "- Never open introP1 with \"You're running\", \"As a " + vertical + " owner\", or \"The " + city + " market is\"\n" +
+    "- Never invent stats. Use \"most\", \"significantly more\", \"faster than\"\n" +
     "- Never reference existing clients or imply past results\n" +
-    "- Forbidden: \"game-changer\", \"seamless\", \"leverage\", \"supercharge\", \"streamline\", \"hard-working\", \"tight-knit\"\n- Review automation copy must NEVER describe filtering, suppressing, or redirecting unhappy customers away from public reviews. Describe it only as sending review requests to customers after job completion.\n" +
-    "- Problem paragraph: one paragraph, name the specific operational failure (not the category), end on consequence\n\n" +
+    "- Forbidden words: game-changer, seamless, leverage, supercharge, streamline, hard-working, tight-knit\n" +
+    "- problemBody: one paragraph. Name the specific operational failure (the exact moment the lead dies -- missed call, 3-hour callback, unanswered form). End on consequence, not category.\n" +
+    "- introP2: must include at least one real neighborhood, one real seasonal pattern, and one competitive observation specific to " + city + "\n" +
+    "- cards: each body must describe a concrete outcome (what the owner sees or stops doing), not a feature category\n" +
+    "- solutionBody: must name at least one specific operational result. Not \"works around the clock\" -- name what stops breaking.\n" +
+    "- Review automation copy: describe only as sending review requests after job completion. Never describe filtering, suppressing, or redirecting unhappy customers.\n\n" +
     "Return ONLY valid JSON, no markdown:\n" +
     "{\n" +
-    "  \"heroSubhead\": \"one sharp line, specific pain + what FBS delivers\",\n" +
-    "  \"introP1\": \"paragraph -- lead with what is happening in their business right now, weave in 1-15 trucks / $300K-$5M naturally\",\n" +
-    "  \"introP2\": \"paragraph -- why " + city + " specifically, a real seasonal or neighborhood observation\",\n" +
-    "  \"problemBody\": \"one paragraph max -- the specific operational failure, local texture, consequence\",\n" +
-    "  \"solutionH2\": \"keyword-rich H2 including " + vertical + " and " + city + "\",\n" +
-    "  \"solutionBody\": \"2-3 sentences -- done-for-you framing, GoHighLevel + AI, live in 10-14 days. May include <a href='/services'>our services</a> or <a href='/demo'>see a demo</a>.\",\n" +
+    "  \"heroSubhead\": \"one sharp line -- specific operational pain + what FBS fixes\",\n" +
+    "  \"introP1\": \"2-3 sentences -- what is happening in their business right now. Weave in truck count and revenue range naturally.\",\n" +
+    "  \"introP2\": \"2-3 sentences -- " + city + "-specific: real neighborhood, real seasonal window, real competitive pressure\",\n" +
+    "  \"problemBody\": \"1 paragraph -- the exact moment the lead dies, local texture, dollar consequence\",\n" +
+    "  \"solutionH2\": \"keyword-rich H2 with " + vertical + " and " + city + "\",\n" +
+    "  \"solutionBody\": \"2-3 sentences -- done-for-you, GoHighLevel + AI, live in 10-14 days, one specific operational result. May include <a href='/services'>our services</a> or <a href='/demo'>see a demo</a>.\",\n" +
     "  \"cards\": [\n" +
-    "    { \"icon\": \"emoji\", \"title\": \"specific capability title\", \"body\": \"2-3 sentences\" },\n" +
-    "    { \"icon\": \"emoji\", \"title\": \"specific capability title\", \"body\": \"2-3 sentences\" },\n" +
-    "    { \"icon\": \"emoji\", \"title\": \"specific capability title\", \"body\": \"2-3 sentences\" },\n" +
-    "    { \"icon\": \"emoji\", \"title\": \"specific capability title\", \"body\": \"2-3 sentences\" }\n" +
+    "    { \"icon\": \"emoji\", \"title\": \"outcome-focused title\", \"body\": \"2-3 sentences describing what the owner sees or stops doing\" },\n" +
+    "    { \"icon\": \"emoji\", \"title\": \"outcome-focused title\", \"body\": \"2-3 sentences\" },\n" +
+    "    { \"icon\": \"emoji\", \"title\": \"outcome-focused title\", \"body\": \"2-3 sentences\" },\n" +
+    "    { \"icon\": \"emoji\", \"title\": \"outcome-focused title\", \"body\": \"2-3 sentences\" }\n" +
     "  ],\n" +
     "  \"faqH2\": \"keyword-rich H2 for FAQ section\",\n" +
     "  \"faqs\": [\n" +
@@ -236,7 +240,7 @@ const CSS = ':root{--bg:#080C14;--bg-card:#0E1420;--bg-alt:#0A0F1A;--border:rgba
 '.section--intro{background:var(--bg-alt);border-top:1px solid var(--border)}' +
 '.container{max-width:1140px;margin:0 auto}.container--narrow{max-width:720px;margin:0 auto}' +
 '.eyebrow{display:block;font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--cyan);margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--border)}' +
-'h2.grad{font-size:clamp(28px,4vw,48px);font-weight:800;line-height:1.15;margin-bottom:20px;background:linear-gradient(90deg,#1B98E0,#8B5CF6);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}' +
+'h2.grad{font-size:clamp(28px,4vw,48px);font-weight:800;line-height:1.15;margin-bottom:20px;color:#F1F5F9}' +
 '.body-text{font-size:19px;line-height:1.8;color:var(--text);margin-bottom:20px}.body-text:last-child{margin-bottom:0}' +
 '.body-text a{color:var(--cyan);text-decoration:underline}' +
 '.cards-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:40px}' +
