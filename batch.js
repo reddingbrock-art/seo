@@ -102,17 +102,29 @@ function buildContentPrompt(derived) {
   const { vertical, city, state, page_type, h1 } = derived;
 
   const faqBank = ({
-    "crm":           ["Do I have to learn new software?", "What if I'm already using GoHighLevel?", "How is this different from just buying a CRM?", "What happens after setup?"],
-    "automation":    ["What exactly gets automated?", "Do I need technical skills to run this?", "What if my team resists new tools?", "How is this different from buying software myself?"],
-    "ai-chat":       ["Will the AI actually sound like my business?", "What happens when the AI can't answer?", "Does this replace my receptionist?", "What hours does the AI chat work?"],
-    "lead-followup": ["How many follow-ups does it send?", "Can I customize what it says?", "What if a lead asks to stop?", "Does this work with my current CRM?"],
-    "reviews":       ["Will this get me fake reviews?", "What if a customer is unhappy?", "Which platforms does this work on?", "How does the timing work?"],
-  })[page_type] || ["Do I have to learn new software?", "How fast will I see results?", "What if something breaks?", "Is there a contract?"];
+    "crm":           ["Do I have to learn new software?", "How is this different from just buying a CRM?", "What does the setup process actually look like?", "What happens after we go live?", "How fast will I see results?", "Is there a contract or can I cancel?"],
+    "automation":    ["What exactly gets automated?", "Do I need technical skills to run this?", "What if my team resists new tools?", "How is this different from buying software myself?", "What does the setup process look like?", "What happens if something breaks after launch?"],
+    "ai-chat":       ["Will the AI actually sound like my business?", "What happens when the AI can't answer something?", "Does this replace my receptionist?", "What hours does the AI work?", "How long does setup take?", "What if a customer realizes they're talking to AI?"],
+    "lead-followup": ["How many follow-ups does it send?", "Can I customize what it says?", "What if a lead asks to stop receiving messages?", "How fast does the first follow-up go out?", "What happens to leads that never respond?", "Does this work alongside my existing process?"],
+    "reviews":       ["Will this get me fake reviews?", "What if a customer is unhappy?", "Which platforms does this work on?", "How does the timing work?", "What if I already have a review process?", "How many more reviews can I realistically expect?"],
+  })[page_type] || ["Do I have to learn new software?", "How fast will I see results?", "What does setup look like?", "What happens after we go live?", "Is there a contract?", "What if something breaks?"];
 
   return "You write conversion copy for Field-Built Systems, a done-for-you automation agency for field service businesses.\n\n" +
     "VERTICAL: " + vertical + " | CITY: " + city + ", " + state + " | PAGE: " + page_type + "\n" +
     "H1: \"" + h1 + "\"\n\n" +
     "RULES:\n" +
+    "- heroSubhead MUST contain one of these exact stats -- pick the most relevant to " + page_type + ":\n" +
+    "  * 78% of customers go with the first company that responds (Lead Response Management Study)\n" +
+    "  * Responding within 1 hour makes you 7x more likely to qualify the lead (HBR)\n" +
+    "  * The odds of reaching a lead drop 100x after 5 minutes (MIT/Kellogg)\n" +
+    "  * 50% of buyers choose the vendor that responds first (HubSpot)\n" +
+    "  * Businesses lose 75% of callers who reach voicemail and hang up (Invoca)\n" +
+    "  * 80% of callers sent to voicemail never leave a message (Ifbyphone)\n" +
+    "  * 40% of service bookings happen outside business hours (ServiceTitan)\n" +
+    "  * 88% of consumers trust online reviews as much as a personal recommendation (BrightLocal)\n" +
+    "  * 53% of customers won't use a business rated below 4 stars (BrightLocal)\n" +
+    "  * A one-star Yelp increase drives 5-9% more revenue (Harvard Business School)\n" +
+    "- heroSubhead must NEVER say: stop losing calls to voicemail, never miss a lead, or any voicemail cliche\n" +
     "- Practitioner voice -- sounds like someone who ran a " + vertical + " business, not a marketer\n" +
     "- Contractions and \"you/your\" throughout. Varied sentence rhythm -- short punchy sentences mixed with longer ones.\n" +
     "- City texture is mandatory in introP2 and problemBody: name real neighborhoods, real seasonal demand windows, real competitive conditions\n" +
@@ -120,22 +132,13 @@ function buildContentPrompt(derived) {
     "- Never invent stats. Use \"most\", \"significantly more\", \"faster than\"\n" +
     "- Never reference existing clients or imply past results\n" +
     "- Forbidden words: game-changer, seamless, leverage, supercharge, streamline, hard-working, tight-knit\n" +
-    "- Forbidden phrases in heroSubhead: \"stop losing calls to voicemail\", \"never miss a lead\", any voicemail/missed call cliche\n" +
-    "- heroSubhead must open with or lead into one conviction stat from this bank -- pick the one most relevant to " + page_type + " and " + vertical + ", do not always use the same one:\n" +
-    "  * 78% of customers go with the first company that responds (Lead Response Management Study)\n" +
-    "  * Responding within 1 hour makes you 7x more likely to qualify the lead (HBR)\n" +
-    "  * The odds of reaching a lead drop 100x after 5 minutes (MIT/Kellogg)\n" +
-    "  * 50% of buyers choose the vendor that responds first (HubSpot)\n" +
-    "  * Businesses lose 75% of callers who reach voicemail and hang up without leaving a message (Invoca)\n" +
-    "  * 80% of callers sent to voicemail never leave a message (Ifbyphone)\n" +
-    "  * 40% of service bookings happen outside business hours (ServiceTitan)\n" +
-    "  * 88% of consumers trust online reviews as much as a personal recommendation (BrightLocal)\n" +
-    "  * 53% of customers won't use a business rated below 4 stars (BrightLocal)\n" +
-    "  * A one-star Yelp increase drives 5-9% more revenue (Harvard Business School)\n" +
+
     "- Never mention pricing, dollar amounts, or monthly costs anywhere -- all roads lead to field-built.com/book\n" +
+    "- Never mention GoHighLevel or any platform/vendor name in copy. Say \"our platform\", \"the system\", or describe what it does.\n" +
     "- problemBody: one paragraph. Name the specific operational failure (the exact moment the lead dies -- missed call, 3-hour callback, unanswered form). End on consequence, not category.\n" +
     "- introP2: must include at least one real neighborhood, one real seasonal pattern, and one competitive observation specific to " + city + "\n" +
-    "- cards: each body must describe a concrete outcome (what the owner sees or stops doing), not a feature category\n" +
+    "- cards: each body must describe a concrete outcome (what the owner sees or stops doing), not a feature category. Same energy as problemBody -- specific, operational, no marketing speak.\n" +
+    "- introP1: must read like the problem paragraph -- a specific operational observation, not a motivational opener. No \"you know there's money walking out the door\" style filler.\n" +
     "- solutionBody: must name at least one specific operational result. Not \"works around the clock\" -- name what stops breaking.\n" +
     "- Review automation copy: describe only as sending review requests after job completion. Never describe filtering, suppressing, or redirecting unhappy customers.\n\n" +
     "Return ONLY valid JSON, no markdown:\n" +
@@ -143,21 +146,25 @@ function buildContentPrompt(derived) {
     "  \"heroSubhead\": \"one sharp line using a conviction stat (e.g. 78% of customers go with the first company that responds) tied to what FBS fixes. Never mention voicemail. Never use cliches.\",\n" +
     "  \"introP1\": \"2-3 sentences -- what is happening in their business right now. Weave in truck count and revenue range naturally.\",\n" +
     "  \"introP2\": \"2-3 sentences -- " + city + "-specific: real neighborhood, real seasonal window, real competitive pressure\",\n" +
+    "  \"introP3\": \"1-2 sentences -- who this is NOT for, or a sharp observation about what separates businesses that fix this from those that don't\",\n" +
     "  \"problemBody\": \"1 paragraph -- the exact moment the lead dies, local texture, dollar consequence\",\n" +
     "  \"solutionH2\": \"keyword-rich H2 with " + vertical + " and " + city + "\",\n" +
-    "  \"solutionBody\": \"2-3 sentences -- done-for-you, GoHighLevel + AI, live in 10-14 days, one specific operational result. May include <a href='/services'>our services</a> or <a href='/demo'>see a demo</a>.\",\n" +
+    "  \"solutionBody\": \"2-3 sentences -- done-for-you framing, no platform names, live in 10-14 days, one specific operational result the owner will notice on day one. May include <a href='/services'>our services</a> or <a href='/demo'>see a demo</a>.\",\n" +
     "  \"cards\": [\n" +
     "    { \"icon\": \"emoji\", \"title\": \"outcome-focused title\", \"body\": \"2-3 sentences describing what the owner sees or stops doing\" },\n" +
     "    { \"icon\": \"emoji\", \"title\": \"outcome-focused title\", \"body\": \"2-3 sentences\" },\n" +
     "    { \"icon\": \"emoji\", \"title\": \"outcome-focused title\", \"body\": \"2-3 sentences\" },\n" +
     "    { \"icon\": \"emoji\", \"title\": \"outcome-focused title\", \"body\": \"2-3 sentences\" }\n" +
     "  ],\n" +
+    "  \"whatHappensNext\": \"3 short steps (array of {step, desc}) -- what happens after booking a call: step 1 discovery, step 2 build, step 3 go live. Concrete, no fluff.\",\n" +
     "  \"faqH2\": \"keyword-rich H2 for FAQ section\",\n" +
     "  \"faqs\": [\n" +
     "    { \"q\": \"" + faqBank[0] + "\", \"a\": \"direct answer, no restatement\" },\n" +
     "    { \"q\": \"" + faqBank[1] + "\", \"a\": \"direct answer\" },\n" +
     "    { \"q\": \"" + faqBank[2] + "\", \"a\": \"direct answer\" },\n" +
-    "    { \"q\": \"" + faqBank[3] + "\", \"a\": \"direct answer\" }\n" +
+    "    { \"q\": \"" + faqBank[3] + "\", \"a\": \"direct answer\" },\n" +
+    "    { \"q\": \"" + faqBank[4] + "\", \"a\": \"direct answer\" },\n" +
+    "    { \"q\": \"" + faqBank[5] + "\", \"a\": \"direct answer\" }\n" +
     "  ]\n" +
     "}";
 }
@@ -288,7 +295,7 @@ const CSS = ':root{--bg:#080C14;--bg-card:#0E1420;--bg-alt:#0A0F1A;--border:rgba
 '.footer-col{display:flex;flex-direction:column;gap:10px}' +
 '.footer-col a{color:var(--muted);font-size:14px;transition:color 0.2s}.footer-col a:hover{color:var(--cyan)}' +
 '.footer-bottom{max-width:1140px;margin:0 auto;padding-top:24px;border-top:1px solid var(--border);text-align:center;font-size:13px;color:var(--muted)}' +
-'@media(max-width:768px){.nav-links,.nav-cta{display:none}.nav-hamburger{display:flex}.hero{padding:100px 20px 60px}.section{padding:60px 20px}.cards-grid{grid-template-columns:1fr}.footer-inner{grid-template-columns:1fr;gap:28px}}';
+'.steps{display:flex;flex-direction:column;gap:24px;margin-top:32px}.step{display:flex;align-items:flex-start;gap:20px}.step-num{min-width:40px;height:40px;border-radius:50%;background:#00D4FF;color:#080C14;font-size:16px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0}.step strong{display:block;font-size:17px;font-weight:700;color:var(--text);margin-bottom:6px}.step p{font-size:16px;color:var(--muted);line-height:1.65;margin:0}@media(max-width:768px){.nav-links,.nav-cta{display:none}.nav-hamburger{display:flex}.hero{padding:100px 20px 60px}.section{padding:60px 20px}.cards-grid{grid-template-columns:1fr}.footer-inner{grid-template-columns:1fr;gap:28px}}';
 
 
 function commitProgress(batchNum) {
@@ -311,9 +318,9 @@ function commitProgress(batchNum) {
 function assembleHTML(derived, content) {
   const { vertical, city, state, slug, h1, midColHeader, ctaH2, serviceDesc } = derived;
   const {
-    heroSubhead = "", introP1 = "", introP2 = "", problemBody = "",
+    heroSubhead = "", introP1 = "", introP2 = "", introP3 = "", problemBody = "",
     solutionH2 = "", solutionBody = "",
-    cards = [], faqH2 = "", faqs = [],
+    cards = [], whatHappensNext = [], faqH2 = "", faqs = [],
   } = content;
 
   const esc = escHtml;
@@ -391,7 +398,7 @@ function assembleHTML(derived, content) {
     '</div></section>\n' +
     '<section class="section section--intro"><div class="container--narrow">' +
     '<span class="eyebrow">Who This Is For</span>' +
-    '<p class="body-text">' + esc(introP1) + '</p><p class="body-text">' + esc(introP2) + '</p>' +
+    '<p class="body-text">' + esc(introP1) + '</p><p class="body-text">' + esc(introP2) + '</p><p class="body-text">' + esc(introP3) + '</p>' +
     '</div></section>\n' +
     '<section class="section"><div class="container--narrow">' +
     '<span class="eyebrow">The Problem</span>' +
@@ -413,7 +420,13 @@ function assembleHTML(derived, content) {
     '<section class="section"><div class="container--narrow">' +
     '<span class="eyebrow">FAQ</span><h2 class="grad">' + esc(faqH2) + '</h2>' +
     '<div>' + faqHTML + '</div></div></section>\n' +
-    '<section class="section section--cta"><div class="container--narrow">' +
+    '<section class="section section--alt"><div class="container--narrow">' +
+'<span class="eyebrow">What Happens Next</span>' +
+'<h2 class="grad">From Call to Live System in 10-14 Days</h2>' +
+'<div class="steps">' +
+whatHappensNext.map(function(s, i) { return '<div class="step"><div class="step-num">' + (i+1) + '</div><div><strong>' + esc(s.step) + '</strong><p>' + esc(s.desc) + '</p></div></div>'; }).join('') +
+'</div></div></section>\n' +
+'<section class="section section--cta"><div class="container--narrow">' +
     '<h2 class="grad">' + esc(ctaH2) + '</h2>' +
     '' +
     '<a href="https://field-built.com/book" class="btn-primary">Book a Free 30-Minute Call</a>' +
