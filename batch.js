@@ -282,12 +282,17 @@ const CSS = ':root{--bg:#080C14;--bg-card:#0E1420;--bg-alt:#0A0F1A;--border:rgba
 function commitProgress(batchNum) {
   try {
     var msg = "batch progress: " + (batchNum * 10) + " pages";
+    execSync("git config user.email \"actions@github.com\"", { stdio: "pipe" });
+    execSync("git config user.name \"github-actions\"", { stdio: "pipe" });
     execSync("git add -A docs/", { stdio: "pipe" });
-    execSync("git commit -m " + JSON.stringify(msg), { stdio: "pipe" });
+    var result = execSync("git status --porcelain", { encoding: "utf8" });
+    if (!result.trim()) { log("  nothing to commit at page " + (batchNum * 10)); return; }
+    execSync("git commit -m " + JSON.stringify(msg + " [skip ci]"), { stdio: "pipe" });
+    execSync("git pull --rebase origin HEAD", { stdio: "pipe" });
     execSync("git push", { stdio: "pipe" });
     log("  committed progress (" + (batchNum * 10) + " pages)");
   } catch (err) {
-    log("  commit skipped: " + (err.message || err));
+    log("  commit failed: " + (err.message || err));
   }
 }
 
