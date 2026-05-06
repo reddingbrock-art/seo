@@ -120,6 +120,18 @@ function buildContentPrompt(derived) {
     "- Never invent stats. Use \"most\", \"significantly more\", \"faster than\"\n" +
     "- Never reference existing clients or imply past results\n" +
     "- Forbidden words: game-changer, seamless, leverage, supercharge, streamline, hard-working, tight-knit\n" +
+    "- Forbidden phrases in heroSubhead: \"stop losing calls to voicemail\", \"never miss a lead\", any voicemail/missed call cliche\n" +
+    "- heroSubhead must open with or lead into one conviction stat from this bank -- pick the one most relevant to " + page_type + " and " + vertical + ", do not always use the same one:\n" +
+    "  * 78% of customers go with the first company that responds (Lead Response Management Study)\n" +
+    "  * Responding within 1 hour makes you 7x more likely to qualify the lead (HBR)\n" +
+    "  * The odds of reaching a lead drop 100x after 5 minutes (MIT/Kellogg)\n" +
+    "  * 50% of buyers choose the vendor that responds first (HubSpot)\n" +
+    "  * Businesses lose 75% of callers who reach voicemail and hang up without leaving a message (Invoca)\n" +
+    "  * 80% of callers sent to voicemail never leave a message (Ifbyphone)\n" +
+    "  * 40% of service bookings happen outside business hours (ServiceTitan)\n" +
+    "  * 88% of consumers trust online reviews as much as a personal recommendation (BrightLocal)\n" +
+    "  * 53% of customers won't use a business rated below 4 stars (BrightLocal)\n" +
+    "  * A one-star Yelp increase drives 5-9% more revenue (Harvard Business School)\n" +
     "- Never mention pricing, dollar amounts, or monthly costs anywhere -- all roads lead to field-built.com/book\n" +
     "- problemBody: one paragraph. Name the specific operational failure (the exact moment the lead dies -- missed call, 3-hour callback, unanswered form). End on consequence, not category.\n" +
     "- introP2: must include at least one real neighborhood, one real seasonal pattern, and one competitive observation specific to " + city + "\n" +
@@ -128,7 +140,7 @@ function buildContentPrompt(derived) {
     "- Review automation copy: describe only as sending review requests after job completion. Never describe filtering, suppressing, or redirecting unhappy customers.\n\n" +
     "Return ONLY valid JSON, no markdown:\n" +
     "{\n" +
-    "  \"heroSubhead\": \"one sharp line -- specific operational pain + what FBS fixes\",\n" +
+    "  \"heroSubhead\": \"one sharp line using a conviction stat (e.g. 78% of customers go with the first company that responds) tied to what FBS fixes. Never mention voicemail. Never use cliches.\",\n" +
     "  \"introP1\": \"2-3 sentences -- what is happening in their business right now. Weave in truck count and revenue range naturally.\",\n" +
     "  \"introP2\": \"2-3 sentences -- " + city + "-specific: real neighborhood, real seasonal window, real competitive pressure\",\n" +
     "  \"problemBody\": \"1 paragraph -- the exact moment the lead dies, local texture, dollar consequence\",\n" +
