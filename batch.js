@@ -6,6 +6,7 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import "dotenv/config";
+import { execSync } from "child_process";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -272,6 +273,19 @@ const CSS = ':root{--bg:#080C14;--bg-card:#0E1420;--bg-alt:#0A0F1A;--border:rgba
 '.footer-bottom{max-width:1140px;margin:0 auto;padding-top:24px;border-top:1px solid var(--border);text-align:center;font-size:13px;color:var(--muted)}' +
 '@media(max-width:768px){.nav-links,.nav-cta{display:none}.nav-hamburger{display:flex}.hero{padding:100px 20px 60px}.section{padding:60px 20px}.cards-grid{grid-template-columns:1fr}.footer-inner{grid-template-columns:1fr;gap:28px}}';
 
+
+function commitProgress(batchNum) {
+  try {
+    var msg = "batch progress: " + (batchNum * 10) + " pages";
+    execSync("git add -A docs/", { stdio: "pipe" });
+    execSync("git commit -m " + JSON.stringify(msg), { stdio: "pipe" });
+    execSync("git push", { stdio: "pipe" });
+    log("  committed progress (" + (batchNum * 10) + " pages)");
+  } catch (err) {
+    log("  commit skipped: " + (err.message || err));
+  }
+}
+
 function assembleHTML(derived, content) {
   const { vertical, city, state, slug, h1, midColHeader, ctaH2, serviceDesc } = derived;
   const {
@@ -464,6 +478,7 @@ async function main() {
       logError(derived.slug, err);
       failed++;
     }
+    if ((i + 1) % 10 === 0) commitProgress(Math.floor((i + 1) / 10));
     if (i < rows.length - 1) await sleep(CONFIG.rate.delayBetweenMs);
   }
 
