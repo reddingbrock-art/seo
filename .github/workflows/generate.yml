@@ -42,7 +42,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          echo "local.field-built.com" > CNAME
-          git add CNAME docs/
+          git pull --rebase origin HEAD
+          git add docs/
           git diff --staged --quiet || git commit -m "Generate SEO pages [skip ci]"
           git push
