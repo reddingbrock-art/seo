@@ -158,7 +158,7 @@ function buildContentPrompt(derived) {
 
     "- Never mention pricing, dollar amounts, or monthly costs anywhere -- all roads lead to field-built.com/book\n" +
     "- Never mention GoHighLevel or any platform/vendor name in copy. Say \"our platform\", \"the system\", or describe what it does.\n" +
-    "- problemBody: one paragraph. Name the specific operational failure (the exact moment the lead dies -- missed call, 3-hour callback, unanswered form). End on consequence, not category.\n" +
+    "- problemBody: one paragraph. Name the specific operational failure (the exact moment the lead dies -- missed call, 3-hour callback, unanswered form). End on consequence, not category. Never invent percentages or stats here -- no made-up numbers.\n" +
     "- introP2: must include at least one real neighborhood, one real seasonal pattern, and one competitive observation specific to " + city + "\n" +
     "- cards: each body must describe a concrete outcome (what the owner sees or stops doing), not a feature category. Same energy as problemBody -- specific, operational, no marketing speak.\n" +
     "- introP1: must read like the problem paragraph -- a specific operational observation, not a motivational opener. No \"you know there's money walking out the door\" style filler.\n" +
@@ -364,7 +364,7 @@ function assembleHTML(derived, content) {
     "@context": "https://schema.org", "@type": "Service", "name": h1,
     "provider": { "@type": "Organization", "name": "Field-Built Systems", "url": "https://field-built.com" },
     "areaServed": city + ", " + state,
-    "description": "Done-for-you " + serviceDesc + " in " + city + ". Built on GoHighLevel with AI chat, lead follow-up, and review automation. Live in 10-14 days.",
+    "description": serviceDesc + " in " + city + ". AI chat, automated lead follow-up, and review automation. Live in 10-14 days.",
     "url": "https://local.field-built.com/" + slug,
   });
 
