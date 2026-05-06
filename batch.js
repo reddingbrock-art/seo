@@ -118,7 +118,7 @@ function buildContentPrompt(derived) {
     "- Never open with \"You're running\", \"As a " + vertical + " owner\", or \"The " + city + " market is\"\n" +
     "- Never invent stats -- use \"most\", \"significantly more\", \"faster than\"\n" +
     "- Never reference existing clients or imply past results\n" +
-    "- Forbidden: \"game-changer\", \"seamless\", \"leverage\", \"supercharge\", \"streamline\", \"hard-working\", \"tight-knit\"\n" +
+    "- Forbidden: \"game-changer\", \"seamless\", \"leverage\", \"supercharge\", \"streamline\", \"hard-working\", \"tight-knit\"\n- Review automation copy must NEVER describe filtering, suppressing, or redirecting unhappy customers away from public reviews. Describe it only as sending review requests to customers after job completion.\n" +
     "- Problem paragraph: one paragraph, name the specific operational failure (not the category), end on consequence\n\n" +
     "Return ONLY valid JSON, no markdown:\n" +
     "{\n" +
@@ -219,7 +219,7 @@ const CSS = ':root{--bg:#080C14;--bg-card:#0E1420;--bg-alt:#0A0F1A;--border:rgba
 '.nav-hamburger span{display:block;width:22px;height:2px;background:var(--text);border-radius:2px}' +
 '.nav-mobile{display:none;flex-direction:column;padding:16px 24px 20px;gap:16px;background:var(--bg-card);border-top:1px solid var(--border)}' +
 '.nav-mobile.open{display:flex}.nav-mobile a{font-size:16px;color:var(--muted)}' +
-'.nav-cta-mobile{background:#00D4FF;border-radius:999px;padding:12px 24px;font-weight:700;color:#080C14;text-align:center;margin-top:4px}' +
+'.nav-cta-mobile{background:#00D4FF;border-radius:999px;padding:12px 24px;font-weight:700;color:#080C14;text-align:center;margin-top:4px;display:block}' +
 '.hero{position:relative;overflow:hidden;min-height:100vh;display:flex;align-items:center;justify-content:center;text-align:center;padding:120px 24px 80px;background:radial-gradient(ellipse 80% 60% at 50% 40%,rgba(27,152,224,0.12) 0%,var(--bg) 70%)}' +
 '.hero::before{content:"";position:absolute;inset:0;pointer-events:none;background-image:linear-gradient(rgba(255,255,255,0.03) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.03) 1px,transparent 1px);background-size:40px 40px}' +
 '.hero-orb{position:absolute;border-radius:50%;filter:blur(80px);pointer-events:none}' +
@@ -229,8 +229,8 @@ const CSS = ':root{--bg:#080C14;--bg-card:#0E1420;--bg-alt:#0A0F1A;--border:rgba
 '.hero-badge{display:inline-block;padding:6px 18px;border-radius:999px;border:1px solid rgba(27,152,224,0.4);font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;background:linear-gradient(90deg,#1B98E0,#8B5CF6);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}' +
 '.hero h1{font-size:clamp(36px,5vw,64px);font-weight:900;color:#F1F5F9;line-height:1.1;letter-spacing:-1px}' +
 '.hero-sub{color:var(--muted);font-size:18px;line-height:1.6;max-width:520px}' +
-'.btn-primary{display:inline-block;padding:16px 36px;border-radius:999px;background:#00D4FF;color:#080C14;font-size:16px;font-weight:700;box-shadow:0 0 32px rgba(0,212,255,0.35);transition:box-shadow 0.2s,transform 0.2s}' +
-'.btn-primary:hover{box-shadow:0 0 48px rgba(0,212,255,0.55);transform:translateY(-2px)}' +
+'.btn-primary{display:inline-block;padding:16px 36px;border-radius:999px;background:#00D4FF;color:#080C14;font-size:16px;font-weight:700;letter-spacing:-0.01em;box-shadow:0 0 28px rgba(0,212,255,0.3);transition:box-shadow 0.2s,transform 0.2s,opacity 0.2s}' +
+'.btn-primary:hover{box-shadow:0 0 44px rgba(0,212,255,0.5);transform:translateY(-2px);opacity:0.92}' +
 '.section{padding:80px 24px}.section--alt{background:var(--bg-alt)}' +
 '.section--intro{background:var(--bg-alt);border-top:1px solid var(--border)}' +
 '.container{max-width:1140px;margin:0 auto}.container--narrow{max-width:720px;margin:0 auto}' +
@@ -330,7 +330,7 @@ function assembleHTML(derived, content) {
   }).join("");
 
   return '<!DOCTYPE html>\n<html lang="en">\n<head>\n' +
-    '<meta charset="UTF-8">\n<meta name="viewport" content="width=device-width,initial-scale=1">\n' +
+    '<meta charset="UTF-8">\n<meta name="viewport" content="width=device-width,initial-scale=1">\n<link rel="icon" type="image/png" href="https://assets.cdn.filesafe.space/8rt3tZ6TYwlA5NWwwHXp/media/69efea020d66f2a665bccba8.png">\n' +
     '<title>' + esc(h1) + ' | Field-Built Systems</title>\n' +
     '<meta name="description" content="' + esc(metaDesc) + '">\n' +
     '<link rel="canonical" href="https://local.field-built.com/' + slug + '">\n' +
