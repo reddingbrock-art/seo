@@ -125,6 +125,8 @@ function buildContentPrompt(derived) {
     "  * 53% of customers won't use a business rated below 4 stars (BrightLocal)\n" +
     "  * A one-star Yelp increase drives 5-9% more revenue (Harvard Business School)\n" +
     "- heroSubhead must NEVER say: stop losing calls to voicemail, never miss a lead, or any voicemail cliche\n" +
+    "- heroSubhead must NEVER editorialize about the owner after the stat (no \"but most shops can't\", \"and you're probably not\", \"but you aren't\" constructions). Let the stat land, then connect it to what FBS delivers.\n" +
+    "- heroSubhead format: [stat as fact] + [what that means for their business or what FBS fixes]. Example: \"78% of customers go with whoever answers first. We make sure that's you.\"\n" +
     "- Practitioner voice -- sounds like someone who ran a " + vertical + " business, not a marketer\n" +
     "- Contractions and \"you/your\" throughout. Varied sentence rhythm -- short punchy sentences mixed with longer ones.\n" +
     "- City texture is mandatory in introP2 and problemBody: name real neighborhoods, real seasonal demand windows, real competitive conditions\n" +
