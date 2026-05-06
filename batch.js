@@ -398,7 +398,7 @@ function assembleHTML(derived, content) {
     '<div>' + faqHTML + '</div></div></section>\n' +
     '<section class="section section--cta"><div class="container--narrow">' +
     '<h2 class="grad">' + esc(ctaH2) + '</h2>' +
-    '<p class="sub">30 minutes. No pitch deck. No pressure.</p>' +
+    '' +
     '<a href="https://field-built.com/book" class="btn-primary">Book a Free 30-Minute Call</a>' +
     '<p class="reassurance">Most clients are live within 10-14 days.</p>' +
     '</div></section>\n' +
