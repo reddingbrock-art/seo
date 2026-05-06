@@ -119,8 +119,8 @@ function buildContentPrompt(derived) {
     "- Never open introP1 with \"You're running\", \"As a " + vertical + " owner\", or \"The " + city + " market is\"\n" +
     "- Never invent stats. Use \"most\", \"significantly more\", \"faster than\"\n" +
     "- Never reference existing clients or imply past results\n" +
-    "- Forbidden words: game-changer, seamless, leverage, supercharge, streamline, hard-working, tight-knit
-- Never mention pricing, dollar amounts, or monthly costs anywhere -- all roads lead to field-built.com/book\n" +
+    "- Forbidden words: game-changer, seamless, leverage, supercharge, streamline, hard-working, tight-knit\n" +
+    "- Never mention pricing, dollar amounts, or monthly costs anywhere -- all roads lead to field-built.com/book\n" +
     "- problemBody: one paragraph. Name the specific operational failure (the exact moment the lead dies -- missed call, 3-hour callback, unanswered form). End on consequence, not category.\n" +
     "- introP2: must include at least one real neighborhood, one real seasonal pattern, and one competitive observation specific to " + city + "\n" +
     "- cards: each body must describe a concrete outcome (what the owner sees or stops doing), not a feature category\n" +
