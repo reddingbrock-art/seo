@@ -1,13 +1,10 @@
 name: Generate SEO Pages
-
 permissions:
   contents: write
-
 on:
   push:
     paths:
       - 'targets.csv'
-
   workflow_dispatch:
     inputs:
       slug:
@@ -18,32 +15,25 @@ on:
         description: 'Generate this many total targets before sharding. Leave blank for full run.'
         required: false
         default: ''
-
 concurrency:
   group: generate-${{ github.ref }}
   cancel-in-progress: false
-
 jobs:
   generate-single-slug:
     name: Generate single slug
     runs-on: ubuntu-22.04
-
     if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.slug != '' }}
-
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-
       - name: Install dependencies
         run: npm install
-
       - name: Generate single slug
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -51,44 +41,35 @@ jobs:
         run: |
           node batch.js \
             --slug "${{ github.event.inputs.slug }}" \
-            --commit-every 10
-
+            --commit-every 20
   generate-sharded:
     name: Generate shard ${{ matrix.shard }} of 10
     runs-on: ubuntu-22.04
-
     if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.slug == '') }}
-
     strategy:
       fail-fast: false
       matrix:
         shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
-
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-
       - name: Install dependencies
         run: npm install
-
       - name: Generate pages for shard
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GITHUB_REF_NAME: ${{ github.ref_name }}
           SAMPLE_COUNT: ${{ github.event.inputs.sample_count }}
         run: |
-          CMD="node batch.js --shard ${{ matrix.shard }} --total-shards 10 --skip-existing --commit-every 10"
-
+          CMD="node batch.js --shard ${{ matrix.shard }} --total-shards 10 --skip-existing --commit-every 20"
           if [ -n "$SAMPLE_COUNT" ]; then
             CMD="$CMD --limit $SAMPLE_COUNT"
           fi
-
           echo "Running: $CMD"
           eval "$CMD"
