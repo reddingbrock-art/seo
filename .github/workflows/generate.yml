@@ -54,7 +54,7 @@ jobs:
             --commit-every 10
 
   generate-sharded:
-    name: Generate shard ${{ matrix.shard }} of 4
+    name: Generate shard ${{ matrix.shard }} of 10
     runs-on: ubuntu-22.04
 
     if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.slug == '') }}
@@ -62,7 +62,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4]
+        shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 
     steps:
       - name: Checkout repo
@@ -84,7 +84,7 @@ jobs:
           GITHUB_REF_NAME: ${{ github.ref_name }}
           SAMPLE_COUNT: ${{ github.event.inputs.sample_count }}
         run: |
-          CMD="node batch.js --shard ${{ matrix.shard }} --total-shards 4 --skip-existing --commit-every 10"
+          CMD="node batch.js --shard ${{ matrix.shard }} --total-shards 10 --skip-existing --commit-every 10"
 
           if [ -n "$SAMPLE_COUNT" ]; then
             CMD="$CMD --limit $SAMPLE_COUNT"
