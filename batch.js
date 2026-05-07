@@ -25,14 +25,32 @@ const CONFIG = {
   },
 };
 
-const args          = process.argv.slice(2);
-const flag          = (f) => { const i = args.indexOf(f); return i !== -1 ? args[i + 1] : null; };
-const hasFlag       = (f) => args.includes(f);
-const LIMIT         = flag("--limit") ? parseInt(flag("--limit")) : null;
-const TARGET_SLUG   = flag("--slug") ?? null;
-const CHUNK_INDEX   = flag("--chunk") ? parseInt(flag("--chunk")) : null;
-const CHUNK_TOTAL   = flag("--of")    ? parseInt(flag("--of"))    : null;
+const args = process.argv.slice(2);
+
+const flag = (f) => {
+  const i = args.indexOf(f);
+  return i !== -1 ? args[i + 1] : null;
+};
+
+const hasFlag = (f) => args.includes(f);
+
+const LIMIT = flag("--limit") ? parseInt(flag("--limit"), 10) : null;
+const TARGET_SLUG = flag("--slug") || null;
 const SKIP_EXISTING = hasFlag("--skip-existing");
+
+const SHARD_INDEX =
+  flag("--shard") ? parseInt(flag("--shard"), 10) :
+  flag("--chunk") ? parseInt(flag("--chunk"), 10) :
+  null;
+
+const SHARD_TOTAL =
+  flag("--total-shards") ? parseInt(flag("--total-shards"), 10) :
+  flag("--of") ? parseInt(flag("--of"), 10) :
+  null;
+
+const COMMIT_EVERY = flag("--commit-every")
+  ? parseInt(flag("--commit-every"), 10)
+  : null;
 
 function log(msg) {
   const line = "[" + new Date().toISOString() + "] " + msg;
@@ -127,8 +145,11 @@ function deriveRow(row) {
       "Businesses with more reviews win more clicks. We build the system that gets them without you asking.",
     ],
   };
+
   const subheadPool = heroSubheadPool[page_type] || heroSubheadPool["crm"];
-  const heroSubhead = subheadPool[Math.abs(slug.split("").reduce(function(a, c) { return a + c.charCodeAt(0); }, 0)) % subheadPool.length];
+  const heroSubhead = subheadPool[Math.abs(slug.split("").reduce(function(a, c) {
+    return a + c.charCodeAt(0);
+  }, 0)) % subheadPool.length];
 
   return Object.assign({}, row, { h1, midColHeader, ctaH2, serviceDesc, angleLabel, heroSubhead });
 }
@@ -155,7 +176,6 @@ function buildContentPrompt(derived) {
     "- Never invent stats. Use \"most\", \"significantly more\", \"faster than\"\n" +
     "- Never reference existing clients or imply past results\n" +
     "- Forbidden words: game-changer, seamless, leverage, supercharge, streamline, hard-working, tight-knit\n" +
-
     "- Never mention pricing, dollar amounts, or monthly costs anywhere -- all roads lead to field-built.com/book\n" +
     "- Never mention GoHighLevel or any platform/vendor name in copy. Say \"our platform\", \"the system\", or describe what it does.\n" +
     "- problemBody: one paragraph. Name the specific operational failure (the exact moment the lead dies -- missed call, 3-hour callback, unanswered form). End on consequence, not category. Never invent percentages or stats here -- no made-up numbers.\n" +
@@ -320,21 +340,46 @@ const CSS = ':root{--bg:#080C14;--bg-card:#0E1420;--bg-alt:#0A0F1A;--border:rgba
 '.footer-bottom{max-width:1140px;margin:0 auto;padding-top:24px;border-top:1px solid var(--border);text-align:center;font-size:13px;color:var(--muted)}' +
 '.steps{display:flex;flex-direction:column;gap:24px;margin-top:32px}.step{display:flex;align-items:flex-start;gap:20px}.step-num{min-width:40px;height:40px;border-radius:50%;background:#00D4FF;color:#080C14;font-size:16px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0}.step strong{display:block;font-size:17px;font-weight:700;color:var(--text);margin-bottom:6px}.step p{font-size:16px;color:var(--muted);line-height:1.65;margin:0}@media(max-width:768px){.nav-links,.nav-cta{display:none}.nav-hamburger{display:flex}.hero{padding:100px 20px 60px}.section{padding:60px 20px}.cards-grid{grid-template-columns:1fr}.footer-inner{grid-template-columns:1fr;gap:28px}}';
 
+async function commitProgress(label) {
+  const branch = process.env.GITHUB_REF_NAME || "main";
 
-function commitProgress(batchNum) {
+  function run(cmd) {
+    return execSync(cmd, { stdio: "pipe", encoding: "utf8" });
+  }
+
   try {
-    var msg = "batch progress: " + (batchNum * 10) + " pages";
-    execSync("git config user.email \"actions@github.com\"", { stdio: "pipe" });
-    execSync("git config user.name \"github-actions\"", { stdio: "pipe" });
-    execSync("git add -A docs/", { stdio: "pipe" });
-    var result = execSync("git status --porcelain", { encoding: "utf8" });
-    if (!result.trim()) { log("  nothing to commit at page " + (batchNum * 10)); return; }
-    execSync("git commit -m " + JSON.stringify(msg + " [skip ci]"), { stdio: "pipe" });
-    execSync("git pull --rebase origin HEAD", { stdio: "pipe" });
-    execSync("git push", { stdio: "pipe" });
-    log("  committed progress (" + (batchNum * 10) + " pages)");
+    run('git config user.email "actions@github.com"');
+    run('git config user.name "github-actions[bot]"');
+    run("git add docs/");
+
+    const status = run("git status --porcelain -- docs/");
+    if (status.trim()) {
+      const shardLabel = SHARD_INDEX && SHARD_TOTAL ? " shard " + SHARD_INDEX + "/" + SHARD_TOTAL : "";
+      const msg = "seo progress" + shardLabel + ": " + label + " [skip ci]";
+      run("git commit -m " + JSON.stringify(msg));
+      log("  committed local progress: " + label);
+    } else {
+      log("  no docs changes to commit: " + label);
+    }
+
+    for (let attempt = 1; attempt <= 5; attempt++) {
+      try {
+        run("git pull --rebase origin " + branch);
+        run("git push origin HEAD:" + branch);
+        log("  pushed progress: " + label);
+        return true;
+      } catch (err) {
+        try { run("git rebase --abort"); } catch (_) {}
+        log("  push retry " + attempt + "/5 failed: " + (err.message || err));
+        if (attempt < 5) await sleep(3000 * attempt);
+      }
+    }
+
+    log("  push failed after retries: " + label);
+    return false;
   } catch (err) {
     log("  commit failed: " + (err.message || err));
+    return false;
   }
 }
 
@@ -388,8 +433,9 @@ function assembleHTML(derived, content) {
     ["AI chat + voice agent",     '<span class="chk">&#10003;</span>', '<span class="x">&#10007;</span>', '<span class="x">&#10007;</span>'],
     ["Automated review requests", '<span class="chk">&#10003;</span>', '<span class="x">&#10007;</span>', '<span class="x">&#10007;</span>'],
     ["Lead follow-up sequences",  '<span class="chk">&#10003;</span>', '<span class="manual">Manual</span>', '<span class="x">&#10007;</span>'],
-    ["Launch timeline",           '<span class="fbs-val">10-14 days</span>', "Months", "Never"],
-    ];
+    ["Launch timeline",          '<span class="fbs-val">10-14 days</span>', "Months", "Never"],
+  ];
+
   const tableRows = tableData.map(function(r, i) {
     return '<tr class="' + (i % 2 === 0 ? "row-odd" : "") + '"><td class="row-label">' + r[0] + '</td><td class="fbs-col">' + r[1] + '</td><td>' + r[2] + '</td><td>' + r[3] + '</td></tr>';
   }).join("");
@@ -444,14 +490,15 @@ function assembleHTML(derived, content) {
     '<span class="eyebrow">FAQ</span><h2 class="grad">' + esc(faqH2) + '</h2>' +
     '<div>' + faqHTML + '</div></div></section>\n' +
     '<section class="section section--alt"><div class="container--narrow">' +
-'<span class="eyebrow">What Happens Next</span>' +
-'<h2 class="grad">From Call to Live System in 10-14 Days</h2>' +
-'<div class="steps">' +
-whatHappensNext.map(function(s, i) { return '<div class="step"><div class="step-num">' + (i+1) + '</div><div><strong>' + esc(s.step) + '</strong><p>' + esc(s.desc) + '</p></div></div>'; }).join('') +
-'</div></div></section>\n' +
-'<section class="section section--cta"><div class="container--narrow">' +
+    '<span class="eyebrow">What Happens Next</span>' +
+    '<h2 class="grad">From Call to Live System in 10-14 Days</h2>' +
+    '<div class="steps">' +
+    whatHappensNext.map(function(s, i) {
+      return '<div class="step"><div class="step-num">' + (i + 1) + '</div><div><strong>' + esc(s.step) + '</strong><p>' + esc(s.desc) + '</p></div></div>';
+    }).join("") +
+    '</div></div></section>\n' +
+    '<section class="section section--cta"><div class="container--narrow">' +
     '<h2 class="grad">' + esc(ctaH2) + '</h2>' +
-    '' +
     '<a href="https://field-built.com/book" class="btn-primary">Book a Free 30-Minute Call</a>' +
     '<p class="reassurance">Most clients are live within 10-14 days.</p>' +
     '</div></section>\n' +
@@ -461,6 +508,7 @@ whatHappensNext.map(function(s, i) { return '<div class="step"><div class="step-
 async function fetchContent(client, derived) {
   const prompt = buildContentPrompt(derived);
   let attempt = 0;
+
   while (true) {
     try {
       const response = await client.messages.create({
@@ -468,6 +516,7 @@ async function fetchContent(client, derived) {
         max_tokens: CONFIG.maxTokens,
         messages:   [{ role: "user", content: prompt }],
       });
+
       const raw = response.content
         .filter(function(b) { return b.type === "text"; })
         .map(function(b) { return b.text; })
@@ -476,10 +525,12 @@ async function fetchContent(client, derived) {
         .replace(/^```\s*/i, "")
         .replace(/\s*```\s*$/i, "")
         .trim();
+
       return JSON.parse(raw);
     } catch (err) {
       attempt++;
       const isRetryable = err.status === 429 || err.status >= 500 || err instanceof SyntaxError;
+
       if (isRetryable && attempt < CONFIG.rate.maxRetries) {
         log("  Retry " + attempt + "/" + CONFIG.rate.maxRetries + " for " + derived.slug + " (" + (err.status || err.message) + ")");
         await sleep(CONFIG.rate.retryDelayMs * attempt);
@@ -492,42 +543,70 @@ async function fetchContent(client, derived) {
 
 async function main() {
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-  if (!fs.existsSync(CONFIG.csvPath)) { console.error("targets.csv not found at " + CONFIG.csvPath); process.exit(1); }
+
+  if (!fs.existsSync(CONFIG.csvPath)) {
+    console.error("targets.csv not found at " + CONFIG.csvPath);
+    process.exit(1);
+  }
 
   ensureDir(CONFIG.outputDir);
   fs.writeFileSync(path.join(CONFIG.outputDir, "CNAME"), CONFIG.cname, "utf8");
   log("CNAME written: " + CONFIG.cname);
 
   const raw = fs.readFileSync(CONFIG.csvPath, "utf8");
-  let rows  = parse(raw, { columns: true, skip_empty_lines: true, trim: true });
+  let rows = parse(raw, { columns: true, skip_empty_lines: true, trim: true });
   const total = rows.length;
 
   if (TARGET_SLUG) {
     rows = rows.filter(function(r) { return r.slug === TARGET_SLUG; });
-    if (rows.length === 0) { console.error("No row found with slug: " + TARGET_SLUG); process.exit(1); }
+
+    if (rows.length === 0) {
+      console.error("No row found with slug: " + TARGET_SLUG);
+      process.exit(1);
+    }
   }
-  if (CHUNK_INDEX !== null && CHUNK_TOTAL !== null) {
-    rows = rows.filter(function(_, i) { return i % CHUNK_TOTAL === CHUNK_INDEX - 1; });
-    log("Chunk " + CHUNK_INDEX + "/" + CHUNK_TOTAL + ": " + rows.length + " rows");
+
+  if (LIMIT) {
+    rows = rows.slice(0, LIMIT);
+    log("Limit applied before sharding: " + rows.length + " rows");
   }
-  if (LIMIT) rows = rows.slice(0, LIMIT);
+
+  if (SHARD_INDEX !== null || SHARD_TOTAL !== null) {
+    if (!SHARD_INDEX || !SHARD_TOTAL || SHARD_INDEX < 1 || SHARD_TOTAL < 1 || SHARD_INDEX > SHARD_TOTAL) {
+      console.error("Invalid shard settings. Use --shard 1 --total-shards 4");
+      process.exit(1);
+    }
+
+    rows = rows.filter(function(_, i) {
+      return i % SHARD_TOTAL === SHARD_INDEX - 1;
+    });
+
+    log("Shard " + SHARD_INDEX + "/" + SHARD_TOTAL + ": " + rows.length + " rows");
+  }
+
   if (SKIP_EXISTING) {
     const before = rows.length;
-    rows = rows.filter(function(r) { return !fs.existsSync(outputPath(r.slug)); });
+    rows = rows.filter(function(r) {
+      return !fs.existsSync(outputPath(r.slug));
+    });
     log("Skip-existing: " + (before - rows.length) + " already done, " + rows.length + " remaining");
   }
 
   log("Starting batch: " + rows.length + " pages (total in CSV: " + total + ")");
+
   let success = 0;
-  let failed  = 0;
+  let failed = 0;
+  let lastCommitAt = 0;
 
   for (let i = 0; i < rows.length; i++) {
     const derived = deriveRow(rows[i]);
-    const out     = outputPath(derived.slug);
+    const out = outputPath(derived.slug);
+
     log("[" + (i + 1) + "/" + rows.length + "] Generating: " + derived.slug);
+
     try {
       const content = await fetchContent(client, derived);
-      const html    = assembleHTML(derived, content);
+      const html = assembleHTML(derived, content);
       fs.writeFileSync(out, html, "utf8");
       log("  ok " + derived.slug);
       success++;
@@ -535,12 +614,30 @@ async function main() {
       logError(derived.slug, err);
       failed++;
     }
-    if ((i + 1) % 10 === 0) commitProgress(Math.floor((i + 1) / 10));
-    if (i < rows.length - 1) await sleep(CONFIG.rate.delayBetweenMs);
+
+    if (COMMIT_EVERY && success > 0 && success % COMMIT_EVERY === 0 && success !== lastCommitAt) {
+      await commitProgress(success + " generated pages");
+      lastCommitAt = success;
+    }
+
+    if (i < rows.length - 1) {
+      await sleep(CONFIG.rate.delayBetweenMs);
+    }
+  }
+
+  if (COMMIT_EVERY) {
+    await commitProgress("final " + success + " generated pages");
   }
 
   log("\nDone. ok " + success + " succeeded  FAIL " + failed + " failed");
-  if (failed > 0) { log("Check batch-errors.log for details."); process.exit(1); }
+
+  if (failed > 0) {
+    log("Check batch-errors.log for details.");
+    process.exit(1);
+  }
 }
 
-main().catch(function(err) { console.error("Fatal:", err); process.exit(1); });
+main().catch(function(err) {
+  console.error("Fatal:", err);
+  process.exit(1);
+});
