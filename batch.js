@@ -127,10 +127,10 @@ function deriveRow(row) {
       "The businesses pulling ahead right now aren't working harder. They've automated what used to fall through the cracks.",
     ],
     "ai-chat": [
-      "80% of callers sent to voicemail never leave a message. Our AI answers every time.",
-      "78% of customers go with whoever responds first. AI chat means you always pick up.",
-      "The odds of reaching a lead drop 100x after 5 minutes. AI chat closes that window permanently.",
-      "50% of buyers choose the first company that responds. Your competitors are still letting it ring.",
+      "Most website visitors browse, don't call, and never come back. AI chat catches them before they leave.",
+      "78% of customers go with whoever responds first. A chat widget on your site responds the moment they land.",
+      "The gap between a visitor and a booked job is one unanswered question. AI chat closes it automatically.",
+      "50% of buyers choose the first company that responds. Your competitors are still waiting for the phone to ring.",
     ],
     "lead-followup": [
       "The odds of reaching a lead drop 100x after 5 minutes. We follow up before they forget you.",
@@ -160,7 +160,7 @@ function buildContentPrompt(derived) {
   const faqBank = ({
     "crm":           ["Do I have to learn new software?", "How is this different from just buying a CRM?", "What does the setup process actually look like?", "What happens after we go live?", "How fast will I see results?", "Is there a contract or can I cancel?"],
     "automation":    ["What exactly gets automated?", "Do I need technical skills to run this?", "What if my team resists new tools?", "How is this different from buying software myself?", "What does the setup process look like?", "What happens if something breaks after launch?"],
-    "ai-chat":       ["Will the AI actually sound like my business?", "What happens when the AI can't answer something?", "Does this replace my receptionist?", "What hours does the AI work?", "How long does setup take?", "What if a customer realizes they're talking to AI?"],
+    "ai-chat":       ["Will the chat widget actually sound like my business?", "What happens when the chat can't answer something?", "Does this replace my receptionist?", "What hours does the chat widget work?", "How long does setup take?", "What if a customer wants to call instead of chat?"],
     "lead-followup": ["How many follow-ups does it send?", "Can I customize what it says?", "What if a lead asks to stop receiving messages?", "How fast does the first follow-up go out?", "What happens to leads that never respond?", "Does this work alongside my existing process?"],
     "reviews":       ["Will this get me fake reviews?", "What if a customer is unhappy?", "Which platforms does this work on?", "How does the timing work?", "What if I already have a review process?", "How many more reviews can I realistically expect?"],
   })[page_type] || ["Do I have to learn new software?", "How fast will I see results?", "What does setup look like?", "What happens after we go live?", "Is there a contract?", "What if something breaks?"];
@@ -183,7 +183,9 @@ function buildContentPrompt(derived) {
     "- cards: each body must describe a concrete outcome (what the owner sees or stops doing), not a feature category. Same energy as problemBody -- specific, operational, no marketing speak.\n" +
     "- introP1: must read like the problem paragraph -- a specific operational observation, not a motivational opener. No \"you know there's money walking out the door\" style filler.\n" +
     "- solutionBody: must name at least one specific operational result. Not \"works around the clock\" -- name what stops breaking.\n" +
-    "- Review automation copy: describe only as sending review requests after job completion. Never describe filtering, suppressing, or redirecting unhappy customers.\n\n" +
+    "- Review automation copy: describe only as sending review requests after job completion. Never describe filtering, suppressing, or redirecting unhappy customers.\n" +
+    "- ai-chat pages are about a WEBSITE CHAT WIDGET only. All four cards must cover chat-on-website behavior: capturing visitors who won't call, qualifying via chat, booking without a phone call, re-engaging visitors who chatted but didn't book. Never mention phone calls, voicemail, or missed calls on ai-chat pages.\n" +
+    "- If you reference a year anywhere, use " + new Date().getFullYear() + " only. Never reference a past year.\n\n" +
     "Return ONLY valid JSON, no markdown:\n" +
     "{\n" +
     "  \"heroSubhead\": \"one sharp line using a conviction stat (e.g. 78% of customers go with the first company that responds) tied to what FBS fixes. Never mention voicemail. Never use cliches.\",\n" +
@@ -589,10 +591,11 @@ async function main() {
     rows = rows.filter(function(r) {
       return !fs.existsSync(outputPath(r.slug));
     });
-    log("Skip-existing: " + (before - rows.length) + " already done, " + rows.length + " remaining");
+    const alreadyDone = before - rows.length;
+    log("Skip-existing: " + alreadyDone + " already done, " + rows.length + " to generate");
   }
 
-  log("Starting batch: " + rows.length + " pages (total in CSV: " + total + ")");
+  log("Starting batch: " + rows.length + " pages to generate (total in CSV: " + total + ")");
 
   let success = 0;
   let failed = 0;
