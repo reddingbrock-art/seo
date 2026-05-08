@@ -127,10 +127,10 @@ function deriveRow(row) {
       "The businesses pulling ahead right now aren't working harder. They've automated what used to fall through the cracks.",
     ],
     "ai-chat": [
-      "Most website visitors browse, don't call, and never come back. AI chat catches them before they leave.",
-      "78% of customers go with whoever responds first. A chat widget on your site responds the moment they land.",
-      "The gap between a visitor and a booked job is one unanswered question. AI chat closes it automatically.",
-      "50% of buyers choose the first company that responds. Your competitors are still waiting for the phone to ring.",
+      "Most website visitors leave without ever contacting you. A chat widget books them before they go.",
+      "70% of service shoppers decide on the first company that answers their questions. AI chat makes that company yours.",
+      "The gap between a site visitor and a booked appointment is one unanswered question. AI chat closes it before they leave.",
+      "Visitors who can't get a quick answer move on to the next result. AI chat gives them one instantly — and books the job.",
     ],
     "lead-followup": [
       "The odds of reaching a lead drop 100x after 5 minutes. We follow up before they forget you.",
