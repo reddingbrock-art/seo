@@ -435,7 +435,7 @@ function assembleHTML(derived, content) {
     ["AI chat + voice agent",     '<span class="chk">&#10003;</span>', '<span class="x">&#10007;</span>', '<span class="x">&#10007;</span>'],
     ["Automated review requests", '<span class="chk">&#10003;</span>', '<span class="x">&#10007;</span>', '<span class="x">&#10007;</span>'],
     ["Lead follow-up sequences",  '<span class="chk">&#10003;</span>', '<span class="manual">Manual</span>', '<span class="x">&#10007;</span>'],
-    ["Launch timeline",          '<span class="fbs-val">10-14 days</span>', "Months", "Never"],
+    ["Launch timeline",           '<span class="fbs-val">10-14 days</span>', "Months", "Never"],
   ];
 
   const tableRows = tableData.map(function(r, i) {
@@ -559,40 +559,36 @@ async function main() {
   let rows = parse(raw, { columns: true, skip_empty_lines: true, trim: true });
   const total = rows.length;
 
+  // 1. Single-slug target — short-circuit everything else
   if (TARGET_SLUG) {
     rows = rows.filter(function(r) { return r.slug === TARGET_SLUG; });
-
     if (rows.length === 0) {
       console.error("No row found with slug: " + TARGET_SLUG);
       process.exit(1);
     }
   }
 
-  if (LIMIT) {
-    rows = rows.slice(0, LIMIT);
-    log("Limit applied before sharding: " + rows.length + " rows");
-  }
-
+  // 2. Shard — divide the full candidate pool across parallel workers
   if (SHARD_INDEX !== null || SHARD_TOTAL !== null) {
     if (!SHARD_INDEX || !SHARD_TOTAL || SHARD_INDEX < 1 || SHARD_TOTAL < 1 || SHARD_INDEX > SHARD_TOTAL) {
       console.error("Invalid shard settings. Use --shard 1 --total-shards 4");
       process.exit(1);
     }
-
-    rows = rows.filter(function(_, i) {
-      return i % SHARD_TOTAL === SHARD_INDEX - 1;
-    });
-
+    rows = rows.filter(function(_, i) { return i % SHARD_TOTAL === SHARD_INDEX - 1; });
     log("Shard " + SHARD_INDEX + "/" + SHARD_TOTAL + ": " + rows.length + " rows");
   }
 
+  // 3. Skip existing — remove already-generated pages from the work queue
   if (SKIP_EXISTING) {
     const before = rows.length;
-    rows = rows.filter(function(r) {
-      return !fs.existsSync(outputPath(r.slug));
-    });
-    const alreadyDone = before - rows.length;
-    log("Skip-existing: " + alreadyDone + " already done, " + rows.length + " to generate");
+    rows = rows.filter(function(r) { return !fs.existsSync(outputPath(r.slug)); });
+    log("Skip-existing: " + (before - rows.length) + " already done, " + rows.length + " remaining");
+  }
+
+  // 4. Limit — cap how many NEW pages this run generates (applied after skipping)
+  if (LIMIT) {
+    rows = rows.slice(0, LIMIT);
+    log("Limit: will generate " + rows.length + " new pages this run");
   }
 
   log("Starting batch: " + rows.length + " pages to generate (total in CSV: " + total + ")");
