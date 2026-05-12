@@ -568,7 +568,20 @@ async function main() {
     }
   }
 
-  // 2. Shard — divide the full candidate pool across parallel workers
+  // 2. Skip existing — remove already-generated pages from the full pool
+  if (SKIP_EXISTING) {
+    const before = rows.length;
+    rows = rows.filter(function(r) { return !fs.existsSync(outputPath(r.slug)); });
+    log("Skip-existing: " + (before - rows.length) + " already done, " + rows.length + " remaining");
+  }
+
+  // 3. Limit — cap the total work pool before sharding so all shards together produce exactly N pages
+  if (LIMIT) {
+    rows = rows.slice(0, LIMIT);
+    log("Limit: " + rows.length + " pages total across all shards");
+  }
+
+  // 4. Shard — divide the capped pool across parallel workers
   if (SHARD_INDEX !== null || SHARD_TOTAL !== null) {
     if (!SHARD_INDEX || !SHARD_TOTAL || SHARD_INDEX < 1 || SHARD_TOTAL < 1 || SHARD_INDEX > SHARD_TOTAL) {
       console.error("Invalid shard settings. Use --shard 1 --total-shards 4");
@@ -576,19 +589,6 @@ async function main() {
     }
     rows = rows.filter(function(_, i) { return i % SHARD_TOTAL === SHARD_INDEX - 1; });
     log("Shard " + SHARD_INDEX + "/" + SHARD_TOTAL + ": " + rows.length + " rows");
-  }
-
-  // 3. Skip existing — remove already-generated pages from the work queue
-  if (SKIP_EXISTING) {
-    const before = rows.length;
-    rows = rows.filter(function(r) { return !fs.existsSync(outputPath(r.slug)); });
-    log("Skip-existing: " + (before - rows.length) + " already done, " + rows.length + " remaining");
-  }
-
-  // 4. Limit — cap how many NEW pages this run generates (applied after skipping)
-  if (LIMIT) {
-    rows = rows.slice(0, LIMIT);
-    log("Limit: will generate " + rows.length + " new pages this run");
   }
 
   log("Starting batch: " + rows.length + " pages to generate (total in CSV: " + total + ")");
