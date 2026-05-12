@@ -20,7 +20,7 @@ const CONFIG = {
   maxTokens: 2000,
   rate: {
     delayBetweenMs: 100,
-    retryDelayMs:   15000,
+    retryDelayMs:   60000,
     maxRetries:     3,
   },
 };
