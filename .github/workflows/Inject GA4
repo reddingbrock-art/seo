@@ -1,0 +1,25 @@
+name: Inject GA4
+on:
+  workflow_dispatch:
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Inject GA4 into pages that are missing it
+        run: |
+          find docs -name "*.html" | while read f; do
+            if ! grep -q "googletagmanager" "$f"; then
+              sed -i 's|</head>|<script async src="https://www.googletagmanager.com/gtag/js?id=G-6SMPNJH9F7"></script>\n<script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag("js",new Date());gtag("config","G-6SMPNJH9F7");</script>\n</head>|' "$f"
+            fi
+          done
+
+      - name: Commit
+        run: |
+          git config user.email "actions@github.com"
+          git config user.name "github-actions[bot]"
+          git add docs/
+          git diff --staged --quiet || git commit -m "inject GA4 into existing pages"
+          git push
