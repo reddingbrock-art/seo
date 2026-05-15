@@ -1,0 +1,28 @@
+name: Fix Duplicate Site Verification
+on:
+  workflow_dispatch:
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Remove duplicate google-site-verification tags
+        run: |
+          find docs -name "*.html" | while read f; do
+            count=$(grep -c "google-site-verification" "$f" || true)
+            if [ "$count" -gt "1" ]; then
+              # Remove all occurrences, then re-inject once after canonical
+              sed -i '/google-site-verification/d' "$f"
+              sed -i 's|<link rel="canonical"[^>]*>|&\n<meta name="google-site-verification" content="fbPxocvFaeeB1gFWna_BrU4i0RDoF1ZYwzLrxDWxv9w">|' "$f"
+            fi
+          done
+
+      - name: Commit fixed pages
+        run: |
+          git config user.email "actions@github.com"
+          git config user.name "github-actions[bot]"
+          git add docs/
+          git diff --staged --quiet || git commit -m "remove duplicate google-site-verification tags"
+          git push
