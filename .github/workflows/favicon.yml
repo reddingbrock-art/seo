@@ -1,0 +1,25 @@
+name: Inject Favicon
+on:
+  workflow_dispatch:
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Inject favicon into pages that are missing it
+        run: |
+          find docs -name "*.html" | while read f; do
+            if ! grep -q "rel=\"icon\"" "$f"; then
+              sed -i 's|<meta charset="UTF-8">|&\n<link rel="icon" type="image/png" href="https://assets.cdn.filesafe.space/8rt3tZ6TYwlA5NWwwHXp/media/69efea020d66f2a665bccba8.png">|' "$f"
+            fi
+          done
+
+      - name: Commit
+        run: |
+          git config user.email "actions@github.com"
+          git config user.name "github-actions[bot]"
+          git add docs/
+          git diff --staged --quiet || git commit -m "inject favicon into existing pages"
+          git push
