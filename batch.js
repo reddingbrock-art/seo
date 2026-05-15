@@ -25,6 +25,8 @@ const CONFIG = {
   },
 };
 
+const GA_ID = "G-6SMPNJH9F7";
+
 const args = process.argv.slice(2);
 
 const flag = (f) => {
@@ -386,7 +388,7 @@ async function commitProgress(label) {
 }
 
 function assembleHTML(derived, content) {
-  const { vertical, city, state, slug, h1, midColHeader, ctaH2, serviceDesc } = derived;
+  const { vertical, city, state, slug, h1, midColHeader, ctaH2, serviceDesc, page_type } = derived;
   const {
     introP1 = "", introP2 = "", introP3 = "", problemBody = "",
     solutionH2 = "", solutionBody = "",
@@ -394,7 +396,10 @@ function assembleHTML(derived, content) {
   } = content;
 
   const esc = escHtml;
-  const metaDesc = ("Done-for-you " + derived.page_type + " for " + vertical + " companies in " + city + ", " + state + ". AI chat, automated follow-up, and Google review automation. Live in 10-14 days.").slice(0, 160);
+  const metaDesc = ("Done-for-you " + page_type + " for " + vertical + " companies in " + city + ", " + state + ". AI chat, automated follow-up, and Google review automation. Live in 10-14 days.").slice(0, 160);
+
+  const bookingUrl = "https://field-built.com/book?utm_source=seo&utm_medium=organic&utm_campaign=" + page_type + "&utm_content=" + slug;
+  const demoUrl   = "https://field-built.com/demo?utm_source=seo&utm_medium=organic&utm_campaign=" + page_type + "&utm_content=" + slug;
 
   const schemaLocal = JSON.stringify({
     "@context": "https://schema.org", "@type": "LocalBusiness",
@@ -457,6 +462,8 @@ function assembleHTML(derived, content) {
     '<link rel="preconnect" href="https://fonts.googleapis.com">\n' +
     '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>\n' +
     '<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">\n' +
+    '<script async src="https://www.googletagmanager.com/gtag/js?id=' + GA_ID + '"><\/script>\n' +
+    '<script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag("js",new Date());gtag("config","' + GA_ID + '");<\/script>\n' +
     '<script type="application/ld+json">' + schemaLocal + '<\/script>\n' +
     '<script type="application/ld+json">' + schemaService + '<\/script>\n' +
     '<script type="application/ld+json">' + schemaFaq + '<\/script>\n' +
@@ -465,7 +472,7 @@ function assembleHTML(derived, content) {
     '<section class="hero"><div class="hero-orb hero-orb--1"></div><div class="hero-orb hero-orb--2"></div>' +
     '<div class="hero-inner"><div class="hero-badge">Done-for-you &middot; Live in 10-14 days</div>' +
     '<h1>' + esc(h1) + '</h1><p class="hero-sub">' + esc(derived.heroSubhead) + '</p>' +
-    '<a href="https://field-built.com/book" class="btn-primary">Book a Free 30-Minute Call</a>' +
+    '<a href="' + bookingUrl + '" class="btn-primary">Book a Free 30-Minute Call</a>' +
     '</div></section>\n' +
     '<section class="section section--intro"><div class="container--narrow">' +
     '<span class="eyebrow">Who This Is For</span>' +
@@ -501,7 +508,7 @@ function assembleHTML(derived, content) {
     '</div></div></section>\n' +
     '<section class="section section--cta"><div class="container--narrow">' +
     '<h2 class="grad">' + esc(ctaH2) + '</h2>' +
-    '<a href="https://field-built.com/book" class="btn-primary">Book a Free 30-Minute Call</a>' +
+    '<a href="' + bookingUrl + '" class="btn-primary">Book a Free 30-Minute Call</a>' +
     '<p class="reassurance">Most clients are live within 10-14 days.</p>' +
     '</div></section>\n' +
     '</main>\n' + FOOTER_HTML + '\n' + NAV_JS + '\n</body>\n</html>';
@@ -559,7 +566,6 @@ async function main() {
   let rows = parse(raw, { columns: true, skip_empty_lines: true, trim: true });
   const total = rows.length;
 
-  // 1. Single-slug target — short-circuit everything else
   if (TARGET_SLUG) {
     rows = rows.filter(function(r) { return r.slug === TARGET_SLUG; });
     if (rows.length === 0) {
@@ -568,20 +574,17 @@ async function main() {
     }
   }
 
-  // 2. Skip existing — remove already-generated pages from the full pool
   if (SKIP_EXISTING) {
     const before = rows.length;
     rows = rows.filter(function(r) { return !fs.existsSync(outputPath(r.slug)); });
     log("Skip-existing: " + (before - rows.length) + " already done, " + rows.length + " remaining");
   }
 
-  // 3. Limit — cap the total work pool before sharding so all shards together produce exactly N pages
   if (LIMIT) {
     rows = rows.slice(0, LIMIT);
     log("Limit: " + rows.length + " pages total across all shards");
   }
 
-  // 4. Shard — divide the capped pool across parallel workers
   if (SHARD_INDEX !== null || SHARD_TOTAL !== null) {
     if (!SHARD_INDEX || !SHARD_TOTAL || SHARD_INDEX < 1 || SHARD_TOTAL < 1 || SHARD_INDEX > SHARD_TOTAL) {
       console.error("Invalid shard settings. Use --shard 1 --total-shards 4");
@@ -627,6 +630,18 @@ async function main() {
   if (COMMIT_EVERY) {
     await commitProgress("final " + success + " generated pages");
   }
+
+  const htmlFiles = fs.readdirSync(CONFIG.outputDir)
+    .filter(function(f) { return f.endsWith(".html"); })
+    .sort();
+  const sitemapUrls = htmlFiles.map(function(f) {
+    return "  <url><loc>https://" + CONFIG.cname + "/" + f.replace(/\.html$/, "") + "</loc></url>";
+  }).join("\n");
+  const sitemapXml = '<?xml version="1.0" encoding="UTF-8"?>\n' +
+    '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' +
+    sitemapUrls + "\n</urlset>";
+  fs.writeFileSync(path.join(CONFIG.outputDir, "sitemap.xml"), sitemapXml, "utf8");
+  log("Sitemap written: " + htmlFiles.length + " URLs");
 
   log("\nDone. ok " + success + " succeeded  FAIL " + failed + " failed");
 
