@@ -452,6 +452,7 @@ function assembleHTML(derived, content) {
     '<title>' + esc(h1) + ' | Field-Built Systems</title>\n' +
     '<meta name="description" content="' + esc(metaDesc) + '">\n' +
     '<link rel="canonical" href="https://local.field-built.com/' + slug + '">\n' +
+    '<meta name="google-site-verification" content="fbPxocvFaeeB1gFWna_BrU4i0RDoF1ZYwzLrxDWxv9w">\n' +
     '<meta name="robots" content="index,follow">\n' +
     '<meta property="og:title" content="' + esc(h1) + ' | Field-Built Systems">\n' +
     '<meta property="og:description" content="' + esc(metaDesc) + '">\n' +
