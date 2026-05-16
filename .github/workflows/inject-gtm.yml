@@ -13,43 +13,53 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v3
 
-      - name: Remove old direct GA4 snippet
+      - name: Inject GTM and remove old GA4
         run: |
-          python3 - <<'EOF'
+          python3 - <<'PYEOF'
           import os, re
+
+          GTM_HEAD = (
+              '<!-- Google Tag Manager -->\n'
+              '<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({"gtm.start":'
+              'new Date().getTime(),event:"gtm.js"});var f=d.getElementsByTagName(s)[0],'
+              'j=d.createElement(s),dl=l!="dataLayer"?"&l="+l:"";j.async=true;j.src='
+              '"https://www.googletagmanager.com/gtm.js?id="+i+dl;'
+              'f.parentNode.insertBefore(j,f);})(window,document,"script","dataLayer","GTM-TCZNRHLF");</script>\n'
+              '<!-- End Google Tag Manager -->'
+          )
+
+          GTM_BODY = (
+              '<!-- Google Tag Manager (noscript) -->\n'
+              '<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-TCZNRHLF"'
+              ' height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>\n'
+              '<!-- End Google Tag Manager (noscript) -->'
+          )
+
           for root, dirs, files in os.walk('docs'):
               for fname in files:
                   if not fname.endswith('.html'):
                       continue
                   path = os.path.join(root, fname)
                   with open(path, 'r', encoding='utf-8', errors='ignore') as f:
-                      content = f.read()
-                  cleaned = re.sub(
-                      r'<script async src="https://www\.googletagmanager\.com/gtag/js\?id=G-6SMPNJH9F7"></script>\s*<script>window\.dataLayer.*?G-6SMPNJH9F7[^<]*</script>',
+                      html = f.read()
+
+                  html = re.sub(
+                      r'<script async src="https://www\.googletagmanager\.com/gtag/js\?id=G-6SMPNJH9F7">'
+                      r'</script>\s*<script>window\.dataLayer.*?G-6SMPNJH9F7[^<]*</script>',
                       '',
-                      content,
+                      html,
                       flags=re.DOTALL
                   )
-                  if cleaned != content:
-                      with open(path, 'w', encoding='utf-8') as f:
-                          f.write(cleaned)
-          EOF
 
-      - name: Inject GTM head snippet
-        run: |
-          find docs -name "*.html" | while read file; do
-            if ! grep -q "GTM-TCZNRHLF" "$file"; then
-              sed -i 's|<head>|<head>\n<!-- Google Tag Manager -->\n<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({"gtm.start":new Date().getTime(),event:"gtm.js"});var f=d.getElementsByTagName(s)[0],j=d.createElement(s),dl=l!="dataLayer"?"\\&l="+l:"";j.async=true;j.src="https://www.googletagmanager.com/gtm.js?id="+i+dl;f.parentNode.insertBefore(j,f);})(window,document,"script","dataLayer","GTM-TCZNRHLF");</script>\n<!-- End Google Tag Manager -->|' "$file"
-            fi
-          done
+                  if 'GTM-TCZNRHLF' not in html:
+                      html = html.replace('<head>', '<head>\n' + GTM_HEAD, 1)
+                      html = html.replace('<body>', '<body>\n' + GTM_BODY, 1)
 
-      - name: Inject GTM body snippet
-        run: |
-          find docs -name "*.html" | while read file; do
-            if ! grep -q "ns.html?id=GTM-TCZNRHLF" "$file"; then
-              sed -i 's|<body>|<body>\n<!-- Google Tag Manager (noscript) -->\n<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-TCZNRHLF" height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>\n<!-- End Google Tag Manager (noscript) -->|' "$file"
-            fi
-          done
+                  with open(path, 'w', encoding='utf-8') as f:
+                      f.write(html)
+
+          print('Done.')
+          PYEOF
 
       - name: Commit and push changes
         run: |
